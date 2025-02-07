@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kawaii Calculator</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #f5e6ff, #f0fff8);
+            font-family: 'Arial', sans-serif;
+        }
+
+        .calculator {
+            background: #fff;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.1);
+            max-width: 300px;
+            width: 100%;
+        }
+
+        .display {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: right;
+            font-size: 2em;
+            font-weight: bold;
+            color: #2d3436;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .button {
+            background: #ffb3d9;
+            border: none;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 1.2em;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .button:hover {
+            background: #ff99cc;
+            transform: translateY(-2px);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .operator {
+            background: #ffd93d;
+        }
+
+        .operator:hover {
+            background: #ffcc00;
+        }
+
+        .equals {
+            background: #6c5ce7;
+        }
+
+        .equals:hover {
+            background: #5b4bc4;
+        }
+
+        .clear {
+            background: #ff6b6b;
+        }
+
+        .clear:hover {
+            background: #ff5252;
+        }
+
+        .calculator-title {
+            text-align: center;
+            font-size: 1.5em;
+            color: #2d3436;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .heart {
+            animation: heartbeat 1.5s infinite;
+        }
+
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            14% { transform: scale(1.1); }
+            28% { transform: scale(1); }
+            42% { transform: scale(1.1); }
+            70% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator">
+        <div class="calculator-title">
+            Kawaii<span class="heart">♥</span> Calculator
+        </div>
+        <div class="display">0</div>
+        <div class="buttons">
+            <button class="button clear" onclick="clearDisplay()">C</button>
+            <button class="button operator" onclick="appendToDisplay('/')">/</button>
+            <button class="button operator" onclick="appendToDisplay('*')">×</button>
+            <button class="button operator" onclick="appendToDisplay('-')">-</button>
+            <button class="button" onclick="appendToDisplay('7')">7</button>
+            <button class="button" onclick="appendToDisplay('8')">8</button>
+            <button class="button" onclick="appendToDisplay('9')">9</button>
+            <button class="button operator" onclick="appendToDisplay('+')">+</button>
+            <button class="button" onclick="appendToDisplay('4')">4</button>
+            <button class="button" onclick="appendToDisplay('5')">5</button>
+            <button class="button" onclick="appendToDisplay('6')">6</button>
+            <button class="button" onclick="appendToDisplay('.')">.</button>
+            <button class="button" onclick="appendToDisplay('1')">1</button>
+            <button class="button" onclick="appendToDisplay('2')">2</button>
+            <button class="button" onclick="appendToDisplay('3')">3</button>
+            <button class="button equals" onclick="calculate()" style="grid-row: span 2">=</button>
+            <button class="button" onclick="appendToDisplay('0')" style="grid-column: span 2">0</button>
+            <button class="button" onclick="appendToDisplay('00')">00</button>
+        </div>
+    </div>
+
+    <script>
+        let display = document.querySelector('.display');
+        let currentCalculation = '0';
+
+        function updateDisplay() {
+            display.textContent = currentCalculation;
+        }
+
+        function appendToDisplay(value) {
+            if (currentCalculation === '0' && value !== '.') {
+                currentCalculation = value;
+            } else {
+                currentCalculation += value;
+            }
+            updateDisplay();
+        }
+
+        function clearDisplay() {
+            currentCalculation = '0';
+            updateDisplay();
+        }
+
+        function calculate() {
+            try {
+                currentCalculation = eval(currentCalculation).toString();
+                updateDisplay();
+            } catch (error) {
+                currentCalculation = 'Error';
+                updateDisplay();
+                setTimeout(clearDisplay, 1000);
+            }
+        }
+
+        // Add keyboard support
+        document.addEventListener('keydown', (event) => {
+            const key = event.key;
+            if (key >= '0' && key <= '9' || key === '.' || key === '+' || key === '-' || key === '*' || key === '/') {
+                appendToDisplay(key);
+            } else if (key === 'Enter') {
+                calculate();
+            } else if (key === 'Escape') {
+                clearDisplay();
+            }
+        });
+
+        // Add animation to display when calculating
+        display.addEventListener('DOMSubtreeModified', function(e) {
+            if (e.target === display) {
+                display.style.animation = 'none';
+                display.offsetHeight; // Trigger reflow
+                display.style.animation = 'glow 0.5s';
+            }
+        });
+
+        // Add bounce animation to buttons
+        document.querySelectorAll('.button').forEach(button => {
+            button.addEventListener('click', function() {
+                this.style.animation = 'none';
+                this.offsetHeight; // Trigger reflow
+                this.style.animation = 'bounce 0.5s';
+            });
+        });
+    </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 Here you can find many examples, which are generated using different AI tools, mostly using GitHub Copilot.
 As little human interaction as possible has been done to generate these.
 
-# Promtps:
+# Prompts:
 
 1. Home Page for a Company (home_page.html) Claude 3.5 Sonnet
 generate home page for gym, include title "Riihimäki Genius Gym", slogan, some text about gym facilities and opening hours and placeholder for image.
@@ -21,6 +21,11 @@ Generate using a platform jumping game in JavaScript, using HTML5 canvas. The ga
 - There should be a way to restart the game.
 - Do NOT use alert or prompt
 
+4. Calculator (calculator.html) Claude 3.5 Sonnet
+generate a kawaii calculator using HTML5 and JS
+
+5. Calculator (calculator2.html) DeepSeek-R1-Distilled-Llama3.3-70B under Croq
+generate a kawaii calculator using HTML5 and JS
 
 
 
