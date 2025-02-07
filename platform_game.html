@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Jumper</title>
+    <style>
+        canvas {
+            border: 2px solid #333;
+            display: block;
+            margin: 0 auto;
+        }
+        body {
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
+        const PLAYER_WIDTH = 30;
+        const PLAYER_HEIGHT = 30;
+        const PLATFORM_HEIGHT = 15;
+        const COIN_SIZE = 20;
+        const GRAVITY = 0.5;
+        const JUMP_FORCE = -12;
+        const MOVE_SPEED = 5;
+        const REQUIRED_COINS = 5;
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let player = {
+            x: 50,
+            y: 300,
+            vx: 0,
+            vy: 0,
+            isJumping: false
+        };
+
+        let gameState = {
+            level: 1,
+            score: 0,
+            coins: [],
+            platforms: [],
+            goalPost: {},
+            coinsCollected: 0
+        };
+
+        // Level designs
+        const levels = [
+            { // Level 1 - Very Easy
+                platforms: [
+                    {x: 0, y: 500, width: 800},
+                    {x: 200, y: 400, width: 200},
+                    {x: 500, y: 300, width: 200}
+                ],
+                coins: [
+                    {x: 250, y: 350},
+                    {x: 300, y: 350},
+                    {x: 550, y: 250},
+                    {x: 600, y: 250},
+                    {x: 650, y: 250}
+                ],
+                goalPost: {x: 700, y: 440}
+            },
+            { // Level 2 - Easy
+                platforms: [
+                    {x: 0, y: 500, width: 200},
+                    {x: 300, y: 450, width: 200},
+                    {x: 600, y: 400, width: 200},
+                    {x: 200, y: 350, width: 200},
+                    {x: 400, y: 300, width: 200}
+                ],
+                coins: [
+                    {x: 320, y: 400},
+                    {x: 620, y: 350},
+                    {x: 220, y: 300},
+                    {x: 420, y: 250},
+                    {x: 480, y: 250}
+                ],
+                goalPost: {x: 700, y: 340}
+            },
+            { // Level 3 - Medium
+                platforms: [
+                    {x: 0, y: 500, width: 150},
+                    {x: 200, y: 450, width: 100},
+                    {x: 400, y: 400, width: 100},
+                    {x: 600, y: 350, width: 100},
+                    {x: 300, y: 300, width: 100},
+                    {x: 100, y: 250, width: 100}
+                ],
+                coins: [
+                    {x: 220, y: 400},
+                    {x: 420, y: 350},
+                    {x: 620, y: 300},
+                    {x: 320, y: 250},
+                    {x: 120, y: 200}
+                ],
+                goalPost: {x: 700, y: 290}
+            }
+        ];
+
+        function loadLevel(levelNum) {
+            const level = levels[levelNum - 1];
+            gameState.platforms = level.platforms;
+            gameState.coins = [...level.coins];
+            gameState.goalPost = level.goalPost;
+            gameState.coinsCollected = 0;
+            player.x = 50;
+            player.y = 300;
+            player.vx = 0;
+            player.vy = 0;
+        }
+
+        function handleInput() {
+            document.addEventListener('keydown', (e) => {
+                switch(e.key) {
+                    case 'ArrowLeft':
+                    case 'a':
+                        player.vx = -MOVE_SPEED;
+                        break;
+                    case 'ArrowRight':
+                    case 'd':
+                        player.vx = MOVE_SPEED;
+                        break;
+                    case 'ArrowUp':
+                    case 'w':
+                    case ' ':
+                        if (!player.isJumping) {
+                            player.vy = JUMP_FORCE;
+                            player.isJumping = true;
+                        }
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                        // Fall through platform
+                        player.y += 5;
+                        break;
+                    case 'r':
+                        // Restart game
+                        gameState.level = 1;
+                        gameState.score = 0;
+                        loadLevel(1);
+                        break;
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                if (['ArrowLeft', 'ArrowRight', 'a', 'd'].includes(e.key)) {
+                    player.vx = 0;
+                }
+            });
+        }
+
+        function update() {
+            // Apply gravity
+            player.vy += GRAVITY;
+            player.y += player.vy;
+            player.x += player.vx;
+
+            // Check platform collisions
+            gameState.platforms.forEach(platform => {
+                if (player.y + PLAYER_HEIGHT > platform.y &&
+                    player.y < platform.y + PLATFORM_HEIGHT &&
+                    player.x + PLAYER_WIDTH > platform.x &&
+                    player.x < platform.x + platform.width) {
+                    
+                    if (player.vy > 0 && player.y < platform.y) {
+                        player.y = platform.y - PLAYER_HEIGHT;
+                        player.vy = 0;
+                        player.isJumping = false;
+                    }
+                }
+            });
+
+            // Collect coins
+            gameState.coins = gameState.coins.filter(coin => {
+                if (player.x < coin.x + COIN_SIZE &&
+                    player.x + PLAYER_WIDTH > coin.x &&
+                    player.y < coin.y + COIN_SIZE &&
+                    player.y + PLAYER_HEIGHT > coin.y) {
+                    gameState.score += 100;
+                    gameState.coinsCollected++;
+                    return false;
+                }
+                return true;
+            });
+
+            // Check goal post
+            if (gameState.coinsCollected >= REQUIRED_COINS &&
+                player.x < gameState.goalPost.x + 30 &&
+                player.x + PLAYER_WIDTH > gameState.goalPost.x &&
+                player.y < gameState.goalPost.y + 60 &&
+                player.y + PLAYER_HEIGHT > gameState.goalPost.y) {
+                if (gameState.level < 3) {
+                    gameState.level++;
+                    loadLevel(gameState.level);
+                } else {
+                    alert('Congratulations! You won! Press R to restart.');
+                    gameState.level = 1;
+                    gameState.score = 0;
+                    loadLevel(1);
+                }
+            }
+
+            // Boundary checking
+            if (player.x < 0) player.x = 0;
+            if (player.x + PLAYER_WIDTH > CANVAS_WIDTH) player.x = CANVAS_WIDTH - PLAYER_WIDTH;
+            if (player.y > CANVAS_HEIGHT) {
+                player.y = 300;
+                player.vy = 0;
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw platforms
+            ctx.fillStyle = '#666';
+            gameState.platforms.forEach(platform => {
+                ctx.fillRect(platform.x, platform.y, platform.width, PLATFORM_HEIGHT);
+            });
+
+            // Draw coins
+            ctx.fillStyle = 'gold';
+            gameState.coins.forEach(coin => {
+                ctx.beginPath();
+                ctx.arc(coin.x + COIN_SIZE/2, coin.y + COIN_SIZE/2, COIN_SIZE/2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw goal post
+            ctx.fillStyle = 'green';
+            ctx.fillRect(gameState.goalPost.x, gameState.goalPost.y, 30, 60);
+
+            // Draw player
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT);
+
+            // Draw HUD
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Level: ${gameState.level}`, 10, 30);
+            ctx.fillText(`Score: ${gameState.score}`, 10, 60);
+            ctx.fillText(`Coins: ${gameState.coinsCollected}/${REQUIRED_COINS}`, 10, 90);
+            ctx.fillText('Press R to restart', CANVAS_WIDTH - 150, 30);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        loadLevel(1);
+        handleInput();
+        gameLoop();
+    </script>
+</body>
+</html>

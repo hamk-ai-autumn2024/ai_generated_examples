@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Candy Crush Clone</title>
+    <style>
+        /* Basic reset and styling */
+        body, h1, button { margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #f0f0f0; display: flex; flex-direction: column; min-height: 100vh; }
+        header, nav, footer { width: 100%; text-align: center; background: #4CAF50; color: white; padding: 10px; }
+        article { flex: 1; display: flex; justify-content: center; align-items: center; padding: 10px; }
+        canvas { background: #ffffff; border: 2px solid #333; max-width: 100%; height: auto; }
+        button { background: #FF9800; border: none; padding: 8px 16px; margin: 10px; font-size: 16px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #E68900; }
+        @media (max-width: 600px) {
+            header, nav, footer { font-size: 14px; }
+            button { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Candy Crush Clone</h1>
+    </header>
+    <nav>
+        <button id="restartButton">Restart Game</button>
+    </nav>
+    <article>
+        <canvas id="gameCanvas"></canvas>
+    </article>
+    <footer>
+        <div>Score: <span id="scoreDisplay">0</span></div>
+    </footer>
+
+    <script>
+        // Constants
+        const ROWS = 8;
+        const COLS = 8;
+        const CELL_SIZE = 40; // in pixels
+        const CANDY_TYPES = ['red', 'blue', 'green', 'yellow', 'purple'];
+        const ANIMATION_DURATION = 300; // milliseconds
+
+        // Game variables
+        let board = [];
+        let score = 0;
+        let selected = null;
+        let animating = false;
+        let animationTime = 0; // timestamp of animation start
+        let matchingCells = [];
+
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = COLS * CELL_SIZE;
+        canvas.height = ROWS * CELL_SIZE;
+
+        /**
+         * Initialize the game board with random candies.
+         */
+        function initBoard() {
+            board = [];
+            for (let row = 0; row < ROWS; row++) {
+                board[row] = [];
+                for (let col = 0; col < COLS; col++) {
+                    board[row][col] = randomCandy();
+                }
+            }
+            score = 0;
+            updateScore();
+        }
+
+        /**
+         * Returns a random candy color.
+         * @return {string} A candy color.
+         */
+        function randomCandy() {
+            return CANDY_TYPES[Math.floor(Math.random() * CANDY_TYPES.length)];
+        }
+
+        /**
+         * Draw the entire game board.
+         */
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const candy = board[row][col];
+                    const x = col * CELL_SIZE;
+                    const y = row * CELL_SIZE;
+                    let opacity = 1;
+                    // If this cell is currently marked for matching animation, calculate fading opacity.
+                    if (matchingCells.some(cell => cell.row === row && cell.col === col)) {
+                        opacity = 1 - (Date.now() - animationTime) / ANIMATION_DURATION;
+                        if (opacity < 0) opacity = 0;
+                    }
+                    ctx.globalAlpha = opacity;
+                    drawCandy(candy, x, y);
+                    ctx.globalAlpha = 1;
+
+                    // Highlight the selected candy.
+                    if (selected && selected.row === row && selected.col === col) {
+                        ctx.strokeStyle = 'black';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Draw a candy as a circle on the canvas.
+         * @param {string} color - Candy color.
+         * @param {number} x - X coordinate.
+         * @param {number} y - Y coordinate.
+         */
+        function drawCandy(color, x, y) {
+            ctx.beginPath();
+            ctx.arc(x + CELL_SIZE / 2, y + CELL_SIZE / 2, CELL_SIZE / 2 - 5, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = '#333';
+            ctx.stroke();
+        }
+
+        /**
+         * Check the board for any connect-3 matches.
+         * @return {Array} Array of cell objects with row and col.
+         */
+        function checkMatches() {
+            const matches = [];
+            // Horizontal check
+            for (let row = 0; row < ROWS; row++) {
+                let count = 1;
+                for (let col = 1; col <= COLS; col++) {
+                    if (col < COLS && board[row][col] === board[row][col - 1]) {
+                        count++;
+                    } else {
+                        if (count >= 3) {
+                            for (let k = 0; k < count; k++) {
+                                matches.push({ row: row, col: col - 1 - k });
+                            }
+                        }
+                        count = 1;
+                    }
+                }
+            }
+            // Vertical check
+            for (let col = 0; col < COLS; col++) {
+                let count = 1;
+                for (let row = 1; row <= ROWS; row++) {
+                    if (row < ROWS && board[row][col] === board[row - 1][col]) {
+                        count++;
+                    } else {
+                        if (count >= 3) {
+                            for (let k = 0; k < count; k++) {
+                                matches.push({ row: row - 1 - k, col });
+                            }
+                        }
+                        count = 1;
+                    }
+                }
+            }
+            return matches;
+        }
+
+        /**
+         * Remove matched candies with animation and update the board.
+         * @param {Array} matches - Array of matching cell coordinates.
+         */
+        function removeMatches(matches) {
+            matches.forEach(cell => {
+                board[cell.row][cell.col] = null;
+                score += 10;
+            });
+            updateScore();
+
+            // Wait for fade-out animation before updating board
+            setTimeout(() => {
+                // Drop candies down for each column.
+                for (let col = 0; col < COLS; col++) {
+                    let emptySpots = 0;
+                    for (let row = ROWS - 1; row >= 0; row--) {
+                        if (board[row][col] === null) {
+                            emptySpots++;
+                        } else if (emptySpots > 0) {
+                            board[row + emptySpots][col] = board[row][col];
+                            board[row][col] = null;
+                        }
+                    }
+                    // Fill empty spots with new random candies.
+                    for (let row = 0; row < emptySpots; row++) {
+                        board[row][col] = randomCandy();
+                    }
+                }
+                matchingCells = [];
+
+                // Check for cascade matches.
+                const newMatches = checkMatches();
+                if (newMatches.length > 0) {
+                    matchingCells = newMatches;
+                    animationTime = Date.now();
+                    setTimeout(() => { removeMatches(newMatches); }, ANIMATION_DURATION);
+                } else {
+                    animating = false;
+                }
+            }, ANIMATION_DURATION);
+        }
+
+        /**
+         * Update the displayed score.
+         */
+        function updateScore() {
+            document.getElementById('scoreDisplay').textContent = score;
+        }
+
+        /**
+         * Swap two candies on the board.
+         * @param {Object} cell1 - The first cell with row and col.
+         * @param {Object} cell2 - The second cell with row and col.
+         */
+        function swapCandies(cell1, cell2) {
+            [board[cell1.row][cell1.col], board[cell2.row][cell2.col]] =
+            [board[cell2.row][cell2.col], board[cell1.row][cell1.col]];
+        }
+
+        /**
+         * Check if two cells are adjacent.
+         * @param {Object} cell1
+         * @param {Object} cell2
+         * @return {boolean} True if cells are adjacent.
+         */
+        function isAdjacent(cell1, cell2) {
+            const dx = Math.abs(cell1.col - cell2.col);
+            const dy = Math.abs(cell1.row - cell2.row);
+            return (dx + dy === 1);
+        }
+
+        // Event listener for canvas clicks.
+        canvas.addEventListener('click', (event) => {
+            if (animating) return; // Disable input during animations.
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            const col = Math.floor(x / CELL_SIZE);
+            const row = Math.floor(y / CELL_SIZE);
+            if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+
+            if (!selected) {
+                selected = { row, col };
+            } else {
+                if (isAdjacent(selected, { row, col })) {
+                    swapCandies(selected, { row, col });
+                    const matches = checkMatches();
+                    if (matches.length > 0) {
+                        animating = true;
+                        matchingCells = matches;
+                        animationTime = Date.now();
+                        setTimeout(() => { removeMatches(matches); }, ANIMATION_DURATION);
+                    } else {
+                        // Revert swap if no match.
+                        swapCandies(selected, { row, col });
+                    }
+                }
+                selected = null;
+            }
+            drawBoard();
+        });
+
+        // Main game loop using requestAnimationFrame.
+        function gameLoop() {
+            drawBoard();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Restart button event.
+        document.getElementById('restartButton').addEventListener('click', () => {
+            initBoard();
+            selected = null;
+            animating = false;
+        });
+
+        // Initialize and start the game.
+        initBoard();
+        gameLoop();
+    </script>
+</body>
+</html>
