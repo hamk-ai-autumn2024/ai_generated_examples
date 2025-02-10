@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Paint</title>
+    <style>
+        :root {
+            --toolbar-height: 60px;
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .paint-app {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .toolbar {
+            height: var(--toolbar-height);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .canvas-container {
+            border: 1px solid #ccc;
+        }
+        #canvas {
+            cursor: crosshair;
+        }
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        input[type="color"] {
+            width: 50px;
+            height: 30px;
+        }
+        input[type="range"] {
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <main class="paint-app">
+        <section class="toolbar">
+            <div class="tool-group">
+                <button id="drawMode">Draw</button>
+                <button id="eraserTool">Eraser</button>
+                <!-- Removed the rectangle tool -->
+                <button id="fillRectMode">Filled Rectangle</button>
+                <button id="fillMode">Fill Tool</button>
+            </div>
+            <div class="tool-group">
+                <label>Line Width:</label>
+                <input type="range" id="lineWidth" min="1" max="50" value="5">
+            </div>
+            <div class="tool-group">
+                <label>Color:</label>
+                <input type="color" id="colorPicker" value="#000000">
+            </div>
+            <div class="tool-group">
+                <label>Fill Color:</label>
+                <input type="color" id="fillColorPicker" value="#ff0000">
+            </div>
+            <button id="clearCanvas">Clear Canvas</button>
+        </section>
+        <section class="canvas-container">
+            <canvas id="canvas"></canvas>
+        </section>
+    </main>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const tools = {
+            DRAW: 'draw',
+            ERASER: 'eraser',
+            FILL_RECTANGLE: 'fillRectangle',
+            FILL: 'fill'
+        };
+
+        let currentTool = tools.DRAW;
+        let isDrawing = false;
+        let startX = 0;
+        let startY = 0;
+
+        // Set canvas size
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = window.innerHeight - 150;
+        }
+
+        // Initialize canvas
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Tool selection event listeners
+        document.getElementById('drawMode').addEventListener('click', () => currentTool = tools.DRAW);
+        document.getElementById('eraserTool').addEventListener('click', () => currentTool = tools.ERASER);
+        document.getElementById('fillRectMode').addEventListener('click', () => currentTool = tools.FILL_RECTANGLE);
+        document.getElementById('fillMode').addEventListener('click', () => currentTool = tools.FILL);
+
+        // Canvas events
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Prevent default drag behavior
+        canvas.addEventListener('dragstart', (e) => e.preventDefault());
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+
+            if (currentTool === tools.DRAW) {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = document.getElementById('colorPicker').value;
+                ctx.lineWidth = document.getElementById('lineWidth').value;
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+            } else if (currentTool === tools.ERASER) {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineWidth = document.getElementById('lineWidth').value;
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+            } else if (currentTool === tools.FILL) {
+                floodFill(startX, startY);
+            }
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (currentTool === tools.DRAW || currentTool === tools.ERASER) {
+                // For draw mode, ensure proper color; for eraser, composite op handles removal.
+                if (currentTool === tools.DRAW) {
+                    ctx.strokeStyle = document.getElementById('colorPicker').value;
+                }
+                ctx.lineWidth = document.getElementById('lineWidth').value;
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } else if (currentTool === tools.FILL_RECTANGLE) {
+                const width = x - startX;
+                const height = y - startY;
+                
+                // Create a copy of the canvas
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // Copy the current canvas state
+                tempCtx.drawImage(canvas, 0, 0);
+                
+                tempCtx.strokeStyle = document.getElementById('colorPicker').value;
+                tempCtx.lineWidth = document.getElementById('lineWidth').value;
+                tempCtx.fillStyle = document.getElementById('fillColorPicker').value;
+                tempCtx.fillRect(startX, startY, width, height);
+                tempCtx.strokeRect(startX, startY, width, height);
+                
+                // Clear and draw the updated content
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(tempCanvas, 0, 0);
+            }
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+            // Reset to default composite operation after drawing/erasing
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        function floodFill(startX, startY) {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+            const startPos = (startY * canvas.width + startX) * 4;
+            const startR = pixels[startPos];
+            const startG = pixels[startPos + 1];
+            const startB = pixels[startPos + 2];
+            const startA = pixels[startPos + 3];
+
+            const fillColor = hexToRgb(document.getElementById('fillColorPicker').value);
+            if (!fillColor) return;
+            
+            function matchesStart(pos) {
+                return pixels[pos] === startR &&
+                       pixels[pos + 1] === startG &&
+                       pixels[pos + 2] === startB &&
+                       pixels[pos + 3] === startA;
+            }
+
+            function fill(pos) {
+                pixels[pos] = fillColor.r;
+                pixels[pos + 1] = fillColor.g;
+                pixels[pos + 2] = fillColor.b;
+                pixels[pos + 3] = 255;
+            }
+
+            const stack = [[startX, startY]];
+            while (stack.length) {
+                const [x, y] = stack.pop();
+                const pos = (y * canvas.width + x) * 4;
+
+                if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) continue;
+                if (!matchesStart(pos)) continue;
+
+                fill(pos);
+                stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        // Clear canvas
+        document.getElementById('clearCanvas').addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+    </script>
+</body>
+</html>

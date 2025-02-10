@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Manager</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --error-color: #e74c3c;
+            --success-color: #2ecc71;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            padding: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin: 0;
+        }
+
+        .operations {
+            display: grid;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        @media (min-width: 768px) {
+            .operations {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .card {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 0.5rem;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: var(--secondary-color);
+        }
+
+        .inventory-list {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        }
+
+        .item-card {
+            background: #f8f9fa;
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+
+        .error {
+            color: var(--error-color);
+            font-size: 0.875rem;
+        }
+
+        .success {
+            color: var(--success-color);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Warehouse Manager</h1>
+    </header>
+
+    <main>
+        <section class="operations">
+            <div class="card">
+                <h2>Add Item</h2>
+                <form id="addForm">
+                    <input type="text" id="addName" placeholder="Item name" required>
+                    <input type="number" id="addPrice" placeholder="Price (cents)" required min="0">
+                    <input type="number" id="addAmount" placeholder="Amount" required min="0">
+                    <button type="submit">Add Item</button>
+                </form>
+                <p id="addMessage"></p>
+            </div>
+
+            <div class="card">
+                <h2>Update Item</h2>
+                <form id="updateForm">
+                    <input type="text" id="updateName" placeholder="Item name" required>
+                    <input type="number" id="updatePrice" placeholder="New price (cents)" required min="0">
+                    <input type="number" id="updateAmount" placeholder="New amount" required min="0">
+                    <button type="submit">Update Item</button>
+                </form>
+                <p id="updateMessage"></p>
+            </div>
+
+            <div class="card">
+                <h2>Remove Item</h2>
+                <form id="removeForm">
+                    <input type="text" id="removeName" placeholder="Item name" required>
+                    <button type="submit">Remove Item</button>
+                </form>
+                <p id="removeMessage"></p>
+            </div>
+        </section>
+
+        <section class="inventory-list" id="inventoryList">
+            <!-- Items will be displayed here -->
+        </section>
+    </main>
+
+    <script>
+        // Warehouse management logic
+        class WarehouseManager {
+            constructor() {
+                this.loadInventory();
+            }
+
+            loadInventory() {
+                this.inventory = JSON.parse(localStorage.getItem('inventory')) || {};
+            }
+
+            saveInventory() {
+                localStorage.setItem('inventory', JSON.stringify(this.inventory));
+            }
+
+            addItem(name, price, amount) {
+                name = this.sanitize(name);
+                if (this.inventory[name]) {
+                    throw new Error('Item already exists');
+                }
+                this.inventory[name] = { price: parseInt(price), amount: parseInt(amount) };
+                this.saveInventory();
+            }
+
+            updateItem(name, price, amount) {
+                name = this.sanitize(name);
+                if (!this.inventory[name]) {
+                    throw new Error('Item does not exist');
+                }
+                this.inventory[name] = { price: parseInt(price), amount: parseInt(amount) };
+                this.saveInventory();
+            }
+
+            removeItem(name) {
+                name = this.sanitize(name);
+                if (!this.inventory[name]) {
+                    throw new Error('Item does not exist');
+                }
+                delete this.inventory[name];
+                this.saveInventory();
+            }
+
+            getInventory() {
+                return this.inventory;
+            }
+
+            sanitize(str) {
+                return str.trim();
+            }
+        }
+
+        // UI Management
+        class WarehouseUI {
+            constructor() {
+                this.warehouse = new WarehouseManager();
+                this.initializeEventListeners();
+                this.updateInventoryDisplay();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('addForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleAdd();
+                });
+
+                document.getElementById('updateForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleUpdate();
+                });
+
+                document.getElementById('removeForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleRemove();
+                });
+            }
+
+            handleAdd() {
+                const name = document.getElementById('addName').value;
+                const price = document.getElementById('addPrice').value;
+                const amount = document.getElementById('addAmount').value;
+                const messageElement = document.getElementById('addMessage');
+
+                try {
+                    this.warehouse.addItem(name, price, amount);
+                    this.updateInventoryDisplay();
+                    document.getElementById('addForm').reset();
+                    this.showMessage(messageElement, 'Item added successfully', 'success');
+                } catch (error) {
+                    this.showMessage(messageElement, error.message, 'error');
+                }
+            }
+
+            handleUpdate() {
+                const name = document.getElementById('updateName').value;
+                const price = document.getElementById('updatePrice').value;
+                const amount = document.getElementById('updateAmount').value;
+                const messageElement = document.getElementById('updateMessage');
+
+                try {
+                    this.warehouse.updateItem(name, price, amount);
+                    this.updateInventoryDisplay();
+                    document.getElementById('updateForm').reset();
+                    this.showMessage(messageElement, 'Item updated successfully', 'success');
+                } catch (error) {
+                    this.showMessage(messageElement, error.message, 'error');
+                }
+            }
+
+            handleRemove() {
+                const name = document.getElementById('removeName').value;
+                const messageElement = document.getElementById('removeMessage');
+
+                try {
+                    this.warehouse.removeItem(name);
+                    this.updateInventoryDisplay();
+                    document.getElementById('removeForm').reset();
+                    this.showMessage(messageElement, 'Item removed successfully', 'success');
+                } catch (error) {
+                    this.showMessage(messageElement, error.message, 'error');
+                }
+            }
+
+            updateInventoryDisplay() {
+                const inventory = this.warehouse.getInventory();
+                const container = document.getElementById('inventoryList');
+                container.innerHTML = '';
+
+                Object.entries(inventory).forEach(([name, item]) => {
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'item-card';
+                    itemElement.innerHTML = `
+                        <strong>${this.escapeHtml(name)}</strong><br>
+                        Price: $${(item.price / 100).toFixed(2)}<br>
+                        Amount: ${item.amount}
+                    `;
+                    container.appendChild(itemElement);
+                });
+            }
+
+            showMessage(element, message, type) {
+                element.textContent = message;
+                element.className = type;
+                setTimeout(() => {
+                    element.textContent = '';
+                    element.className = '';
+                }, 3000);
+            }
+
+            escapeHtml(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+        }
+
+        // Initialize the application
+        new WarehouseUI();
+    </script>
+</body>
+</html>
