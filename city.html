@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rustic Green 3D City</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        Click to start<br>
+        WASD or Arrow Keys: Move<br>
+        Space: Jump<br>
+        Mouse: Look around<br>
+        R: Reset
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(0, 100, 50);
+        scene.add(directionalLight);
+
+        // Ground
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // Obstacles array for collision detection
+        const obstacles = [];
+
+        // Roads
+        const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x808080 });
+        for (let i = -5; i <= 5; i++) {
+            // Horizontal roads
+            const hRoadGeometry = new THREE.BoxGeometry(200, 0.1, 2);
+            const hRoad = new THREE.Mesh(hRoadGeometry, roadMaterial);
+            hRoad.position.set(0, 0.05, i * 10);
+            scene.add(hRoad);
+
+            // Vertical roads
+            const vRoadGeometry = new THREE.BoxGeometry(2, 0.1, 200);
+            const vRoad = new THREE.Mesh(vRoadGeometry, roadMaterial);
+            vRoad.position.set(i * 10, 0.05, 0);
+            scene.add(vRoad);
+        }
+
+        // Buildings
+        const buildingColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
+        for (let i = -4; i <= 4; i++) {
+            for (let j = -4; j <= 4; j++) {
+                const width = 4 + Math.random() * 4;
+                const depth = 4 + Math.random() * 4;
+                const height = 5 + Math.random() * 15;
+                const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+                const buildingMaterial = new THREE.MeshLambertMaterial({
+                    color: buildingColors[Math.floor(Math.random() * buildingColors.length)]
+                });
+                const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                building.position.set(10 * i + 5, height / 2, 10 * j + 5);
+                scene.add(building);
+
+                // Store bounding box for collision
+                obstacles.push({
+                    minX: building.position.x - width / 2,
+                    maxX: building.position.x + width / 2,
+                    minZ: building.position.z - depth / 2,
+                    maxZ: building.position.z + depth / 2
+                });
+            }
+        }
+
+        // Trees
+        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+        const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+        for (let i = -5; i <= 5; i++) {
+            for (let x = -50; x <= 50; x += 10) {
+                // Trees along horizontal roads
+                const trunk1 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 2), trunkMaterial);
+                trunk1.position.set(x, 1, i * 10 + 3);
+                scene.add(trunk1);
+                const leaves1 = new THREE.Mesh(new THREE.ConeGeometry(1, 2), leavesMaterial);
+                leaves1.position.set(x, 2, i * 10 + 3);
+                scene.add(leaves1);
+
+                const trunk2 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 2), trunkMaterial);
+                trunk2.position.set(x, 1, i * 10 - 3);
+                scene.add(trunk2);
+                const leaves2 = new THREE.Mesh(new THREE.ConeGeometry(1, 2), leavesMaterial);
+                leaves2.position.set(x, 2, i * 10 - 3);
+                scene.add(leaves2);
+            }
+        }
+
+        // Hills
+        const hillMaterial = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+        for (let x = -60; x <= 60; x += 20) {
+            // Top and bottom hills
+            const hill1 = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), hillMaterial);
+            hill1.position.set(x, 10, -60);
+            scene.add(hill1);
+            obstacles.push({ minX: x - 10, maxX: x + 10, minZ: -70, maxZ: -50 });
+
+            const hill2 = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), hillMaterial);
+            hill2.position.set(x, 10, 60);
+            scene.add(hill2);
+            obstacles.push({ minX: x - 10, maxX: x + 10, minZ: 50, maxZ: 70 });
+        }
+        for (let z = -60; z <= 60; z += 20) {
+            // Left and right hills
+            const hill3 = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), hillMaterial);
+            hill3.position.set(-60, 10, z);
+            scene.add(hill3);
+            obstacles.push({ minX: -70, maxX: -50, minZ: z - 10, maxZ: z + 10 });
+
+            const hill4 = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), hillMaterial);
+            hill4.position.set(60, 10, z);
+            scene.add(hill4);
+            obstacles.push({ minX: 50, maxX: 70, minZ: z - 10, maxZ: z + 10 });
+        }
+
+        // Player setup
+        const player = {
+            position: new THREE.Vector3(0, 0, 0),
+            velocity: new THREE.Vector3(),
+            eyeHeight: 1.7,
+            size: 1
+        };
+        camera.position.set(player.position.x, player.position.y + player.eyeHeight, player.position.z);
+        const initialPosition = camera.position.clone();
+        const initialRotation = camera.rotation.clone();
+
+        // Custom controls based on PointerLockControls
+        const controls = {
+            moveForward: false,
+            moveBackward: false,
+            moveLeft: false,
+            moveRight: false,
+            velocity: new THREE.Vector3(),
+            enabled: false
+        };
+
+        document.addEventListener('click', () => {
+            renderer.domElement.requestPointerLock();
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            controls.enabled = document.pointerLockElement === renderer.domElement;
+        });
+
+        document.addEventListener('keydown', (event) => {
+            switch (event.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    controls.moveForward = true;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    controls.moveBackward = true;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    controls.moveLeft = true;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    controls.moveRight = true;
+                    break;
+                case 'Space':
+                    if (player.position.y === 0) player.velocity.y = 10;
+                    break;
+                case 'KeyR':
+                    camera.position.copy(initialPosition);
+                    camera.rotation.copy(initialRotation);
+                    player.position.set(0, 0, 0);
+                    player.velocity.set(0, 0, 0);
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            switch (event.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    controls.moveForward = false;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    controls.moveBackward = false;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    controls.moveLeft = false;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    controls.moveRight = false;
+                    break;
+            }
+        });
+
+        document.addEventListener('mousemove', (event) => {
+            if (controls.enabled) {
+                const movementX = event.movementX || 0;
+                const movementY = event.movementY || 0;
+                camera.rotation.y -= movementX * 0.002;
+                camera.rotation.x -= movementY * 0.002;
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            }
+        });
+
+        // Collision detection
+        function checkCollision(newX, newZ) {
+            const minX = newX - player.size / 2;
+            const maxX = newX + player.size / 2;
+            const minZ = newZ - player.size / 2;
+            const maxZ = newZ + player.size / 2;
+            for (const obstacle of obstacles) {
+                if (minX < obstacle.maxX && maxX > obstacle.minX &&
+                    minZ < obstacle.maxZ && maxZ > obstacle.minZ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Animation loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls.enabled) {
+                const delta = clock.getDelta();
+                controls.velocity.x = 0;
+                controls.velocity.z = 0;
+
+                const speed = 20;
+                const direction = new THREE.Vector3();
+                camera.getWorldDirection(direction);
+                direction.y = 0;
+                direction.normalize();
+
+                if (controls.moveForward) {
+                    controls.velocity.x += direction.x * speed;
+                    controls.velocity.z += direction.z * speed;
+                }
+                if (controls.moveBackward) {
+                    controls.velocity.x -= direction.x * speed;
+                    controls.velocity.z -= direction.z * speed;
+                }
+                const strafeDirection = new THREE.Vector3();
+                strafeDirection.crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
+                if (controls.moveLeft) {
+                    controls.velocity.x -= strafeDirection.x * speed;
+                    controls.velocity.z -= strafeDirection.z * speed;
+                }
+                if (controls.moveRight) {
+                    controls.velocity.x += strafeDirection.x * speed;
+                    controls.velocity.z += strafeDirection.z * speed;
+                }
+
+                // Apply movement with collision detection
+                let newX = player.position.x + controls.velocity.x * delta;
+                if (checkCollision(newX, player.position.z)) {
+                    controls.velocity.x = 0;
+                    newX = player.position.x;
+                }
+                player.position.x = newX;
+
+                let newZ = player.position.z + controls.velocity.z * delta;
+                if (checkCollision(player.position.x, newZ)) {
+                    controls.velocity.z = 0;
+                    newZ = player.position.z;
+                }
+                player.position.z = newZ;
+
+                // Apply jumping and gravity
+                player.velocity.y -= 20 * delta; // Gravity
+                player.position.y += player.velocity.y * delta;
+                if (player.position.y < 0) {
+                    player.position.y = 0;
+                    player.velocity.y = 0;
+                }
+
+                // Update camera position
+                camera.position.set(
+                    player.position.x,
+                    player.position.y + player.eyeHeight,
+                    player.position.z
+                );
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

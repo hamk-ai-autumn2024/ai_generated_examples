@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Racing Game</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+        #hud {
+            font-family: Arial, sans-serif;
+            position: absolute;
+            top: 10px;
+            left: 820px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="hud">
+        <p>Coins: <span id="coinCount">0</span></p>
+        <p>Best Lap: <span id="bestLapTime">--:--</span></p>
+        <p>Current Lap: <span id="currentLapTime">00:00</span></p>
+    </div>
+    <script>
+        // Get canvas and context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Track definition
+        const trackPoints = [
+            { x: 100, y: 100 },
+            { x: 400, y: 100 },
+            { x: 700, y: 200 },
+            { x: 700, y: 400 },
+            { x: 400, y: 500 },
+            { x: 100, y: 400 },
+            { x: 100, y: 100 },
+        ];
+
+        // Checkpoints and finish line
+        const checkpoints = [
+            { x: 375, y: 75, width: 50, height: 50 },
+            { x: 675, y: 275, width: 50, height: 50 },
+            { x: 375, y: 475, width: 50, height: 50 },
+        ];
+        const finishLine = { x: 75, y: 75, width: 50, height: 50 };
+
+        // Collectible items
+        const coins = [
+            { x: 200, y: 100, collected: false },
+            { x: 300, y: 100, collected: false },
+            { x: 500, y: 100, collected: false },
+            { x: 600, y: 150, collected: false },
+            { x: 700, y: 250, collected: false },
+            { x: 700, y: 350, collected: false },
+            { x: 600, y: 450, collected: false },
+            { x: 500, y: 500, collected: false },
+            { x: 300, y: 500, collected: false },
+            { x: 200, y: 400, collected: false },
+        ];
+        const speedBoosts = [
+            { x: 400, y: 100, collected: false },
+            { x: 700, y: 300, collected: false },
+            { x: 400, y: 500, collected: false },
+            { x: 100, y: 400, collected: false },
+        ];
+
+        // Car definition
+        let car = {
+            x: 100,         // Starting at the finish line
+            y: 100,
+            θ: 0,           // Angle in radians (0 = right)
+            speed: 0,       // Pixels per second
+            brakeTimer: 0,  // Time brake held while stopped
+        };
+
+        // Physics constants
+        const acceleration = 100;        // Pixels per second squared
+        const brakeDeceleration = 200;   // Higher than acceleration
+        const friction = 50;             // Natural slowdown
+        const turnSpeed = Math.PI;       // Radians per second (180°/s)
+        const maxSpeed = 200;            // Normal max speed
+        const maxReverseSpeed = 100;     // Max reverse speed
+        const boostedMaxSpeed = 300;     // Speed during boost
+
+        // Game state
+        let currentCheckpoint = 0;
+        let lapCompleted = false;
+        let lapStartTime = performance.now();
+        let bestLapTime = Infinity;
+        let coinCount = 0;
+        let speedBoostTimer = 0;
+
+        // Input handling
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === 'r') resetGame();
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Reset game function
+        function resetGame() {
+            car.x = 100;
+            car.y = 100;
+            car.θ = 0;
+            car.speed = 0;
+            car.brakeTimer = 0;
+            currentCheckpoint = 0;
+            lapCompleted = false;
+            lapStartTime = performance.now();
+            coins.forEach(coin => coin.collected = false);
+            speedBoosts.forEach(boost => boost.collected = false);
+            coinCount = 0;
+            speedBoostTimer = 0;
+            document.getElementById('coinCount').textContent = coinCount;
+            document.getElementById('currentLapTime').textContent = '00:00';
+        }
+
+        // Update game state
+        function update(dt) {
+            let isAccelerating = keys['w'] || keys['ArrowUp'];
+            let isBraking = keys['s'] || keys['ArrowDown'];
+            let isTurningLeft = keys['a'] || keys['ArrowLeft'];
+            let isTurningRight = keys['d'] || keys['ArrowRight'];
+            let isSpeedBoosted = speedBoostTimer > 0;
+
+            // Handle speed boost timer
+            if (isSpeedBoosted) {
+                speedBoostTimer -= dt * 1000;
+                if (speedBoostTimer < 0) speedBoostTimer = 0;
+            }
+
+            // Car movement
+            if (isAccelerating) {
+                car.speed += acceleration * dt;
+                let currentMaxSpeed = isSpeedBoosted ? boostedMaxSpeed : maxSpeed;
+                if (car.speed > currentMaxSpeed) car.speed = currentMaxSpeed;
+            } else if (isBraking) {
+                if (car.speed > 0) {
+                    car.speed -= brakeDeceleration * dt;
+                    if (car.speed < 0) car.speed = 0;
+                    car.brakeTimer = 0;
+                } else if (car.speed === 0) {
+                    car.brakeTimer += dt;
+                    if (car.brakeTimer >= 0.5) {
+                        car.speed -= acceleration * dt;
+                        if (car.speed < -maxReverseSpeed) car.speed = -maxReverseSpeed;
+                    }
+                }
+            } else {
+                if (car.speed > 0) {
+                    car.speed -= friction * dt;
+                    if (car.speed < 0) car.speed = 0;
+                } else if (car.speed < 0) {
+                    car.speed += friction * dt;
+                    if (car.speed > 0) car.speed = 0;
+                }
+                car.brakeTimer = 0;
+            }
+
+            // Car turning
+            if (isTurningLeft) car.θ -= turnSpeed * dt;
+            if (isTurningRight) car.θ += turnSpeed * dt;
+
+            // Update position
+            let vx = car.speed * Math.cos(car.θ);
+            let vy = car.speed * Math.sin(car.θ);
+            car.x += vx * dt;
+            car.y += vy * dt;
+
+            // Checkpoint and lap completion
+            if (isInsideRect(car.x, car.y, checkpoints[currentCheckpoint])) {
+                currentCheckpoint++;
+                if (currentCheckpoint >= checkpoints.length) {
+                    lapCompleted = true;
+                }
+            }
+            if (lapCompleted && isInsideRect(car.x, car.y, finishLine)) {
+                let currentTime = performance.now();
+                let lapTime = currentTime - lapStartTime;
+                if (lapTime < bestLapTime) {
+                    bestLapTime = lapTime;
+                    document.getElementById('bestLapTime').textContent = formatTime(bestLapTime);
+                }
+                lapStartTime = currentTime;
+                currentCheckpoint = 0;
+                lapCompleted = false;
+                coins.forEach(coin => coin.collected = false);
+                speedBoosts.forEach(boost => boost.collected = false);
+                coinCount = 0;
+                document.getElementById('coinCount').textContent = coinCount;
+            }
+
+            // Collect coins
+            coins.forEach(coin => {
+                if (!coin.collected && distance(car.x, car.y, coin.x, coin.y) < 25) {
+                    coin.collected = true;
+                    coinCount++;
+                    document.getElementById('coinCount').textContent = coinCount;
+                }
+            });
+
+            // Collect speed boosts
+            speedBoosts.forEach(boost => {
+                if (!boost.collected && distance(car.x, car.y, boost.x, boost.y) < 25) {
+                    boost.collected = true;
+                    speedBoostTimer = 2000; // 2 seconds in milliseconds
+                }
+            });
+
+            // Update current lap time
+            document.getElementById('currentLapTime').textContent = formatTime(performance.now() - lapStartTime);
+        }
+
+        // Render game
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw track
+            ctx.beginPath();
+            ctx.moveTo(trackPoints[0].x, trackPoints[0].y);
+            for (let i = 1; i < trackPoints.length; i++) {
+                ctx.lineTo(trackPoints[i].x, trackPoints[i].y);
+            }
+            ctx.closePath();
+            ctx.lineWidth = 100;
+            ctx.strokeStyle = 'gray';
+            ctx.stroke();
+
+            // Draw checkpoints
+            ctx.fillStyle = 'yellow';
+            checkpoints.forEach(cp => {
+                ctx.fillRect(cp.x, cp.y, cp.width, cp.height);
+            });
+
+            // Draw finish line
+            ctx.fillStyle = 'red';
+            ctx.fillRect(finishLine.x, finishLine.y, finishLine.width, finishLine.height);
+
+            // Draw coins
+            coins.forEach(coin => {
+                if (!coin.collected) {
+                    ctx.beginPath();
+                    ctx.arc(coin.x, coin.y, 10, 0, 2 * Math.PI);
+                    ctx.fillStyle = 'yellow';
+                    ctx.fill();
+                }
+            });
+
+            // Draw speed boosts
+            speedBoosts.forEach(boost => {
+                if (!boost.collected) {
+                    ctx.beginPath();
+                    ctx.arc(boost.x, boost.y, 10, 0, 2 * Math.PI);
+                    ctx.fillStyle = 'green';
+                    ctx.fill();
+                }
+            });
+
+            // Draw car with arrow indicating front
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.θ);
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(-10, -5, 20, 10); // Car body (20x10)
+            ctx.beginPath();
+            ctx.moveTo(10, 0);    // Front center
+            ctx.lineTo(15, 5);    // Bottom of arrow
+            ctx.lineTo(15, -5);   // Top of arrow
+            ctx.fillStyle = 'white';
+            ctx.fill();           // Arrow on hood
+            ctx.restore();
+        }
+
+        // Helper functions
+        function isInsideRect(x, y, rect) {
+            return x >= rect.x && x <= rect.x + rect.width && 
+                   y >= rect.y && y <= rect.y + rect.height;
+        }
+
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+
+        function formatTime(ms) {
+            let seconds = Math.floor(ms / 1000);
+            let minutes = Math.floor(seconds / 60);
+            seconds %= 60;
+            return minutes.toString().padStart(2, '0') + ':' + 
+                   seconds.toString().padStart(2, '0');
+        }
+
+        // Game loop
+        let lastTime = 0;
+        function gameLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            let dt = (timestamp - lastTime) / 1000; // Delta time in seconds
+            lastTime = timestamp;
+
+            update(dt);
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize and start game
+        resetGame();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

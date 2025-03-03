@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match-3 Game</title>
+    <style>
+        #game-container {
+            position: relative;
+            width: 80vmin;
+            height: 80vmin;
+            margin: auto;
+        }
+        #board {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .candy {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: calc(80vmin / 16);
+            transition: all 0.3s ease;
+        }
+        .candy-R { background-color: red; color: white; }
+        .candy-B { background-color: blue; color: white; }
+        .candy-G { background-color: green; color: white; }
+        .candy-Y { background-color: yellow; color: black; }
+        .candy-P { background-color: purple; color: white; }
+        .removing {
+            opacity: 0;
+            transform: scale(0);
+        }
+        .selected {
+            border: 2px solid white;
+            box-shadow: 0 0 5px white;
+        }
+        #score {
+            position: absolute;
+            top: -30px;
+            left: 0;
+            font-size: 24px;
+        }
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 10px;
+            border: 1px solid black;
+            display: none;
+            z-index: 10;
+        }
+        #restart {
+            position: absolute;
+            bottom: -40px;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <div id="board"></div>
+        <button id="restart">Restart</button>
+        <div id="message"></div>
+    </div>
+    <script>
+        const gridSize = 8;
+        const candyTypes = ['R', 'B', 'G', 'Y', 'P'];
+        let grid = [];
+        let score = 0;
+        const board = document.getElementById('board');
+        const scoreDisplay = document.getElementById('score');
+        const messageDisplay = document.getElementById('message');
+        const cellSize = board.clientWidth / gridSize;
+        let selectedCandy = null;
+
+        // Initialize the grid without initial matches
+        function initializeGrid() {
+            grid = Array(gridSize).fill().map(() => Array(gridSize).fill(null));
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    let type;
+                    do {
+                        type = candyTypes[Math.floor(Math.random() * candyTypes.length)];
+                    } while (
+                        (j >= 2 && grid[i][j-1] === type && grid[i][j-2] === type) ||
+                        (i >= 2 && grid[i-1][j] === type && grid[i-2][j] === type)
+                    );
+                    grid[i][j] = type;
+                }
+            }
+        }
+
+        // Render the game board
+        function renderBoard() {
+            board.innerHTML = '';
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    if (grid[i][j]) {
+                        const candyDiv = document.createElement('div');
+                        candyDiv.className = `candy candy-${grid[i][j]}`;
+                        candyDiv.dataset.i = i;
+                        candyDiv.dataset.j = j;
+                        candyDiv.style.top = `${i * cellSize}px`;
+                        candyDiv.style.left = `${j * cellSize}px`;
+                        candyDiv.style.width = `${cellSize}px`;
+                        candyDiv.style.height = `${cellSize}px`;
+                        candyDiv.textContent = grid[i][j];
+                        board.appendChild(candyDiv);
+                    }
+                }
+            }
+        }
+
+        // Swap two candies in the grid
+        function swap(i1, j1, i2, j2) {
+            [grid[i1][j1], grid[i2][j2]] = [grid[i2][j2], grid[i1][j1]];
+        }
+
+        // Find matches of 3 or more candies
+        function findMatches() {
+            const matches = new Set();
+            // Check rows
+            for (let i = 0; i < gridSize; i++) {
+                let count = 1;
+                for (let j = 1; j < gridSize; j++) {
+                    if (grid[i][j] === grid[i][j-1] && grid[i][j] !== null) {
+                        count++;
+                        if (count >= 3) {
+                            for (let k = 0; k < count; k++) {
+                                matches.add(`${i},${j-k}`);
+                            }
+                        }
+                    } else {
+                        count = 1;
+                    }
+                }
+            }
+            // Check columns
+            for (let j = 0; j < gridSize; j++) {
+                let count = 1;
+                for (let i = 1; i < gridSize; i++) {
+                    if (grid[i][j] === grid[i-1][j] && grid[i][j] !== null) {
+                        count++;
+                        if (count >= 3) {
+                            for (let k = 0; k < count; k++) {
+                                matches.add(`${i-k},${j}`);
+                            }
+                        }
+                    } else {
+                        count = 1;
+                    }
+                }
+            }
+            return matches;
+        }
+
+        // Remove matched candies and update score
+        function removeMatches() {
+            const matches = findMatches();
+            if (matches.size > 0) {
+                score += matches.size * 10;
+                scoreDisplay.textContent = `Score: ${score}`;
+                matches.forEach(pos => {
+                    const [i, j] = pos.split(',').map(Number);
+                    const candyDiv = document.querySelector(`[data-i="${i}"][data-j="${j}"]`);
+                    if (candyDiv) {
+                        candyDiv.classList.add('removing');
+                    }
+                });
+                setTimeout(() => {
+                    matches.forEach(pos => {
+                        const [i, j] = pos.split(',').map(Number);
+                        const candyDiv = document.querySelector(`[data-i="${i}"][data-j="${j}"]`);
+                        if (candyDiv) board.removeChild(candyDiv);
+                        grid[i][j] = null;
+                    });
+                    fillGrid();
+                }, 300);
+            } else {
+                if (!hasPossibleMoves()) {
+                    showMessage('No moves left. Resetting board.');
+                    setTimeout(() => {
+                        initializeGrid();
+                        renderBoard();
+                    }, 2000);
+                }
+            }
+        }
+
+        // Fill the grid after removing candies
+        function fillGrid() {
+            const movements = [];
+            const newGrid = Array(gridSize).fill().map(() => Array(gridSize).fill(null));
+            for (let j = 0; j < gridSize; j++) {
+                const existing = [];
+                for (let i = 0; i < gridSize; i++) {
+                    if (grid[i][j] !== null) {
+                        existing.push({i: i, type: grid[i][j]});
+                    }
+                }
+                for (let k = 0; k < existing.length; k++) {
+                    const origI = existing[k].i;
+                    const type = existing[k].type;
+                    newGrid[k][j] = type;
+                    movements.push({fromI: origI, fromJ: j, toI: k, toJ: j, type: type});
+                }
+                for (let k = existing.length; k < gridSize; k++) {
+                    const type = candyTypes[Math.floor(Math.random() * candyTypes.length)];
+                    newGrid[k][j] = type;
+                    movements.push({fromI: -1, fromJ: j, toI: k, toJ: j, type: type});
+                }
+            }
+            grid = newGrid;
+            movements.forEach(move => {
+                if (move.fromI >= 0) {
+                    const candyDiv = document.querySelector(`[data-i="${move.fromI}"][data-j="${move.fromJ}"]`);
+                    if (candyDiv) {
+                        candyDiv.style.top = `${move.toI * cellSize}px`;
+                        candyDiv.dataset.i = move.toI;
+                    }
+                } else {
+                    const candyDiv = document.createElement('div');
+                    candyDiv.className = `candy candy-${move.type}`;
+                    candyDiv.dataset.i = move.toI;
+                    candyDiv.dataset.j = move.toJ;
+                    candyDiv.style.top = `-${cellSize}px`;
+                    candyDiv.style.left = `${move.toJ * cellSize}px`;
+                    candyDiv.style.width = `${cellSize}px`;
+                    candyDiv.style.height = `${cellSize}px`;
+                    candyDiv.textContent = move.type;
+                    board.appendChild(candyDiv);
+                    setTimeout(() => {
+                        candyDiv.style.top = `${move.toI * cellSize}px`;
+                    }, 10);
+                }
+            });
+            setTimeout(removeMatches, 300);
+        }
+
+        // Check if there are any possible moves
+        function hasPossibleMoves() {
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    if (j < gridSize - 1) {
+                        swap(i, j, i, j+1);
+                        const matches = findMatches();
+                        swap(i, j, i, j+1);
+                        if (matches.size > 0) return true;
+                    }
+                    if (i < gridSize - 1) {
+                        swap(i, j, i+1, j);
+                        const matches = findMatches();
+                        swap(i, j, i+1, j);
+                        if (matches.size > 0) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Display a temporary message
+        function showMessage(text) {
+            messageDisplay.textContent = text;
+            messageDisplay.style.display = 'block';
+            setTimeout(() => {
+                messageDisplay.style.display = 'none';
+            }, 2000);
+        }
+
+        // Deselect the currently selected candy
+        function deselectCandy() {
+            if (selectedCandy) {
+                const selectedDiv = document.querySelector(`[data-i="${selectedCandy.i}"][data-j="${selectedCandy.j}"]`);
+                if (selectedDiv) selectedDiv.classList.remove('selected');
+                selectedCandy = null;
+            }
+        }
+
+        // Handle mouse click/tap for selection and swapping
+        board.addEventListener('mousedown', (event) => {
+            event.preventDefault(); // Disable default dragging
+            const rect = board.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            const j = Math.floor(x / cellSize);
+            const i = Math.floor(y / cellSize);
+            if (i >= 0 && i < gridSize && j >= 0 && j < gridSize && grid[i][j]) {
+                if (selectedCandy) {
+                    const di = Math.abs(i - selectedCandy.i);
+                    const dj = Math.abs(j - selectedCandy.j);
+                    if ((di === 1 && dj === 0) || (di === 0 && dj === 1)) {
+                        attemptSwap(selectedCandy.i, selectedCandy.j, i, j);
+                        deselectCandy();
+                    } else {
+                        deselectCandy();
+                        selectedCandy = {i, j};
+                        const candyDiv = document.querySelector(`[data-i="${i}"][data-j="${j}"]`);
+                        if (candyDiv) candyDiv.classList.add('selected');
+                    }
+                } else {
+                    selectedCandy = {i, j};
+                    const candyDiv = document.querySelector(`[data-i="${i}"][data-j="${j}"]`);
+                    if (candyDiv) candyDiv.classList.add('selected');
+                }
+            }
+        });
+
+        // Handle touch input for selection and swapping
+        board.addEventListener('touchstart', (event) => {
+            event.preventDefault(); // Disable default dragging
+            const touch = event.touches[0];
+            const rect = board.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            const j = Math.floor(x / cellSize);
+            const i = Math.floor(y / cellSize);
+            if (i >= 0 && i < gridSize && j >= 0 && j < gridSize && grid[i][j]) {
+                if (selectedCandy) {
+                    const di = Math.abs(i - selectedCandy.i);
+                    const dj = Math.abs(j - selectedCandy.j);
+                    if ((di === 1 && dj === 0) || (di === 0 && dj === 1)) {
+                        attemptSwap(selectedCandy.i, selectedCandy.j, i, j);
+                        deselectCandy();
+                    } else {
+                        deselectCandy();
+                        selectedCandy = {i, j};
+                        const candyDiv = document.querySelector(`[data-i="${i}"][data-j="${j}"]`);
+                        if (candyDiv) candyDiv.classList.add('selected');
+                    }
+                } else {
+                    selectedCandy = {i, j};
+                    const candyDiv = document.querySelector(`[data-i="${i}"][data-j="${j}"]`);
+                    if (candyDiv) candyDiv.classList.add('selected');
+                }
+            }
+        }, {passive: false});
+
+        // Attempt to swap two candies and handle matches
+        function attemptSwap(i1, j1, i2, j2) {
+            const candy1 = document.querySelector(`[data-i="${i1}"][data-j="${j1}"]`);
+            const candy2 = document.querySelector(`[data-i="${i2}"][data-j="${j2}"]`);
+            if (!candy1 || !candy2) return;
+            swap(i1, j1, i2, j2);
+            const matches = findMatches();
+            if (matches.size > 0) {
+                candy1.style.top = `${i2 * cellSize}px`;
+                candy1.style.left = `${j2 * cellSize}px`;
+                candy1.dataset.i = i2;
+                candy1.dataset.j = j2;
+                candy2.style.top = `${i1 * cellSize}px`;
+                candy2.style.left = `${j1 * cellSize}px`;
+                candy2.dataset.i = i1;
+                candy2.dataset.j = j1;
+                setTimeout(removeMatches, 300);
+            } else {
+                swap(i1, j1, i2, j2);
+                candy1.style.top = `${i1 * cellSize}px`;
+                candy1.style.left = `${j1 * cellSize}px`;
+                candy2.style.top = `${i2 * cellSize}px`;
+                candy2.style.left = `${j2 * cellSize}px`;
+            }
+        }
+
+        // Restart the game
+        document.getElementById('restart').addEventListener('click', () => {
+            initializeGrid();
+            renderBoard();
+            score = 0;
+            scoreDisplay.textContent = `Score: 0`;
+            deselectCandy();
+        });
+
+        // Initialize the game
+        initializeGrid();
+        renderBoard();
+    </script>
+</body>
+</html>

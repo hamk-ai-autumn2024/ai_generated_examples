@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        pre {
+            font-family: monospace;
+            line-height: 1;
+            font-size: 12px;
+        }
+        .red { color: #ff5555; }
+        .green { color: #55ff55; }
+        .yellow { color: #ffff55; }
+        .blue { color: #5555ff; }
+        .magenta { color: #ff55ff; }
+        .cyan { color: #55ffff; }
+        body { background: #000000; margin: 0; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <pre id="cube"></pre>
+    <script>
+        const cols = 40;
+        const rows = 20;
+        const scale = 10;
+        let theta = 0;
+        let phi = 0;
+
+        const faces = [
+            { symbol: '❤', color: 'red', points: [] },    // Front
+            { symbol: '💀', color: 'green', points: [] },  // Back
+            { symbol: '✗', color: 'yellow', points: [] },  // Top
+            { symbol: '●', color: 'blue', points: [] },    // Bottom
+            { symbol: '■', color: 'magenta', points: [] }, // Left
+            { symbol: '❀', color: 'cyan', points: [] },    // Right
+        ];
+
+        function generateFacePoints(faceIndex) {
+            const points = [];
+            const step = 0.08;
+            for (let a = -1; a <= 1; a += step) {
+                for (let b = -1; b <= 1; b += step) {
+                    let x, y, z;
+                    switch (faceIndex) {
+                        case 0: x = a; y = b; z = 1; break;
+                        case 1: x = a; y = b; z = -1; break;
+                        case 2: x = a; y = 1; z = b; break;
+                        case 3: x = a; y = -1; z = b; break;
+                        case 4: x = -1; y = a; z = b; break;
+                        case 5: x = 1; y = a; z = b; break;
+                    }
+                    points.push({ x, y, z });
+                }
+            }
+            return points;
+        }
+
+        faces.forEach((face, index) => {
+            face.points = generateFacePoints(index);
+        });
+
+        function initBuffer() {
+            return Array.from({ length: rows }, () => 
+                Array.from({ length: cols }, () => ({ 
+                    z: -Infinity, 
+                    symbol: ' ', 
+                    color: 'white' 
+                }))
+            );
+        }
+
+        function rotatePoint(x, y, z, theta, phi) {
+            // X-axis rotation
+            const y1 = y * Math.cos(theta) - z * Math.sin(theta);
+            const z1 = y * Math.sin(theta) + z * Math.cos(theta);
+            // Y-axis rotation
+            const x2 = x * Math.cos(phi) + z1 * Math.sin(phi);
+            const z2 = -x * Math.sin(phi) + z1 * Math.cos(phi);
+            return { x: x2, y: y1, z: z2 };
+        }
+
+        function renderBuffer(buffer) {
+            let html = '';
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = buffer[i][j];
+                    html += `<span class="${cell.color}">${cell.symbol}</span>`;
+                }
+                html += '\n';
+            }
+            document.getElementById('cube').innerHTML = html;
+        }
+
+        function animate() {
+            theta += 0.02;
+            phi += 0.03;
+            
+            const buffer = initBuffer();
+            
+            faces.forEach(face => {
+                face.points.forEach(({ x, y, z }) => {
+                    const rotated = rotatePoint(x, y, z, theta, phi);
+                    const screenX = rotated.x * scale + cols/2;
+                    const screenY = rotated.y * scale + rows/2;
+                    const j = Math.floor(screenX);
+                    const i = Math.floor(screenY);
+                    
+                    if (i >= 0 && i < rows && j >= 0 && j < cols) {
+                        if (rotated.z > buffer[i][j].z) {
+                            buffer[i][j].z = rotated.z;
+                            buffer[i][j].symbol = face.symbol;
+                            buffer[i][j].color = face.color;
+                        }
+                    }
+                });
+            });
+            
+            renderBuffer(buffer);
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Candy Crush Clone</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(to bottom, #8e44ad, #3498db);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas {
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        #game-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #ui {
+            display: flex;
+            justify-content: space-between;
+            width: 320px;
+            margin-bottom: 10px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        #score {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        button {
+            background-color: #f39c12;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background-color: #e67e22;
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="ui">
+            <div id="score">Score: 0</div>
+            <button id="restart">Restart</button>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Game constants
+            const ROWS = 8;
+            const COLS = 8;
+            const CELL_SIZE = 40;
+            const CANVAS_WIDTH = COLS * CELL_SIZE;
+            const CANVAS_HEIGHT = ROWS * CELL_SIZE;
+            const CANDY_TYPES = 6;
+            const ANIMATION_SPEED = 8;
+            const SWAP_SPEED = 4;
+            const FALL_SPEED = 12;
+            
+            // Game elements
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const scoreElement = document.getElementById('score');
+            const restartButton = document.getElementById('restart');
+            
+            // Set canvas dimensions
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
+            
+            // Game state
+            let board = [];
+            let selectedCandy = null;
+            let score = 0;
+            let animations = [];
+            let isSwapping = false;
+            let isFalling = false;
+            let touchStartX = 0;
+            let touchStartY = 0;
+            
+            // Candy colors
+            const candyColors = [
+                '#ff5252', // Red
+                '#ffeb3b', // Yellow
+                '#43a047', // Green
+                '#2196f3', // Blue
+                '#9c27b0', // Purple
+                '#ff9800'  // Orange
+            ];
+            
+            // Initialize game
+            function initGame() {
+                board = [];
+                animations = [];
+                score = 0;
+                selectedCandy = null;
+                isSwapping = false;
+                isFalling = false;
+                scoreElement.textContent = `Score: ${score}`;
+                
+                // Create board
+                for (let row = 0; row < ROWS; row++) {
+                    board[row] = [];
+                    for (let col = 0; col < COLS; col++) {
+                        let type;
+                        do {
+                            type = Math.floor(Math.random() * CANDY_TYPES);
+                        } while (
+                            // Check for initial matches (horizontal)
+                            (col >= 2 && board[row][col-1] === type && board[row][col-2] === type) ||
+                            // Check for initial matches (vertical)
+                            (row >= 2 && board[row-1][col] === type && board[row-2][col] === type)
+                        );
+                        
+                        board[row][col] = type;
+                    }
+                }
+                
+                // Draw initial board
+                drawBoard();
+            }
+            
+            // Draw the game board
+            function drawBoard() {
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                
+                // Draw grid background
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                for (let row = 0; row < ROWS; row++) {
+                    for (let col = 0; col < COLS; col++) {
+                        if ((row + col) % 2 === 0) {
+                            ctx.fillRect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                        }
+                    }
+                }
+                
+                // Draw candies
+                for (let row = 0; row < ROWS; row++) {
+                    for (let col = 0; col < COLS; col++) {
+                        if (board[row][col] !== -1) { // -1 means empty cell
+                            drawCandy(row, col);
+                        }
+                    }
+                }
+                
+                // Draw selected candy highlight
+                if (selectedCandy) {
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(
+                        selectedCandy.col * CELL_SIZE + 2,
+                        selectedCandy.row * CELL_SIZE + 2,
+                        CELL_SIZE - 4,
+                        CELL_SIZE - 4
+                    );
+                }
+                
+                // Draw animations
+                for (let i = 0; i < animations.length; i++) {
+                    const anim = animations[i];
+                    if (anim.type === 'explode') {
+                        const progress = anim.frame / anim.duration;
+                        const radius = CELL_SIZE * 0.4 * (1 - progress);
+                        const alpha = 1 - progress;
+                        
+                        ctx.globalAlpha = alpha;
+                        ctx.beginPath();
+                        ctx.arc(
+                            anim.col * CELL_SIZE + CELL_SIZE / 2,
+                            anim.row * CELL_SIZE + CELL_SIZE / 2,
+                            radius,
+                            0,
+                            Math.PI * 2
+                        );
+                        ctx.fillStyle = candyColors[anim.candyType];
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    } else if (anim.type === 'swap') {
+                        const progress = anim.frame / anim.duration;
+                        const candy1X = (anim.col1 * (1 - progress) + anim.col2 * progress) * CELL_SIZE;
+                        const candy1Y = (anim.row1 * (1 - progress) + anim.row2 * progress) * CELL_SIZE;
+                        const candy2X = (anim.col2 * (1 - progress) + anim.col1 * progress) * CELL_SIZE;
+                        const candy2Y = (anim.row2 * (1 - progress) + anim.row1 * progress) * CELL_SIZE;
+                        
+                        drawCandyAt(anim.type1, candy1X, candy1Y);
+                        drawCandyAt(anim.type2, candy2X, candy2Y);
+                    } else if (anim.type === 'fall') {
+                        const progress = anim.frame / anim.duration;
+                        const y = (anim.startRow * (1 - progress) + anim.endRow * progress) * CELL_SIZE;
+                        
+                        drawCandyAt(anim.candyType, anim.col * CELL_SIZE, y);
+                    }
+                }
+            }
+            
+            // Draw a candy at the specified board position
+            function drawCandy(row, col) {
+                const type = board[row][col];
+                const x = col * CELL_SIZE;
+                const y = row * CELL_SIZE;
+                drawCandyAt(type, x, y);
+            }
+            
+            // Draw a candy at the specified pixel position
+            function drawCandyAt(type, x, y) {
+                const centerX = x + CELL_SIZE / 2;
+                const centerY = y + CELL_SIZE / 2;
+                const radius = CELL_SIZE * 0.4;
+                
+                ctx.fillStyle = candyColors[type];
+                
+                // Draw candy with different shapes for each type
+                switch (type) {
+                    case 0: // Circle
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Add highlight
+                        ctx.beginPath();
+                        ctx.arc(centerX - radius / 3, centerY - radius / 3, radius / 4, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                        ctx.fill();
+                        break;
+                        
+                    case 1: // Square
+                        ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
+                        
+                        // Add highlight
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                        ctx.fillRect(centerX - radius + 5, centerY - radius + 5, radius / 2, radius / 2);
+                        break;
+                        
+                    case 2: // Triangle
+                        ctx.beginPath();
+                        ctx.moveTo(centerX, centerY - radius);
+                        ctx.lineTo(centerX + radius, centerY + radius);
+                        ctx.lineTo(centerX - radius, centerY + radius);
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Add highlight
+                        ctx.beginPath();
+                        ctx.moveTo(centerX - radius / 3, centerY);
+                        ctx.lineTo(centerX, centerY - radius / 3);
+                        ctx.lineTo(centerX, centerY);
+                        ctx.closePath();
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                        ctx.fill();
+                        break;
+                        
+                    case 3: // Diamond
+                        ctx.beginPath();
+                        ctx.moveTo(centerX, centerY - radius);
+                        ctx.lineTo(centerX + radius, centerY);
+                        ctx.lineTo(centerX, centerY + radius);
+                        ctx.lineTo(centerX - radius, centerY);
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Add highlight
+                        ctx.beginPath();
+                        ctx.moveTo(centerX - radius / 3, centerY - radius / 3);
+                        ctx.lineTo(centerX, centerY - radius / 2);
+                        ctx.lineTo(centerX, centerY - radius / 4);
+                        ctx.closePath();
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                        ctx.fill();
+                        break;
+                        
+                    case 4: // Star
+                        const spikes = 5;
+                        const outerRadius = radius;
+                        const innerRadius = radius / 2;
+                        
+                        ctx.beginPath();
+                        for (let i = 0; i < spikes * 2; i++) {
+                            const r = i % 2 === 0 ? outerRadius : innerRadius;
+                            const angle = Math.PI * i / spikes;
+                            const x = centerX + Math.cos(angle) * r;
+                            const y = centerY + Math.sin(angle) * r;
+                            
+                            if (i === 0) ctx.moveTo(x, y);
+                            else ctx.lineTo(x, y);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Add highlight
+                        ctx.beginPath();
+                        ctx.arc(centerX - innerRadius / 2, centerY - innerRadius / 2, innerRadius / 3, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                        ctx.fill();
+                        break;
+                        
+                    case 5: // Hexagon
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            const angle = Math.PI / 3 * i;
+                            const x = centerX + Math.cos(angle) * radius;
+                            const y = centerY + Math.sin(angle) * radius;
+                            
+                            if (i === 0) ctx.moveTo(x, y);
+                            else ctx.lineTo(x, y);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Add highlight
+                        ctx.beginPath();
+                        ctx.arc(centerX - radius / 3, centerY - radius / 3, radius / 4, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                        ctx.fill();
+                        break;
+                }
+                
+                // Add shadow/outline
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            
+            // Check for matches in the board
+            function checkMatches() {
+                const matches = new Set();
+                
+                // Check horizontal matches
+                for (let row = 0; row < ROWS; row++) {
+                    for (let col = 0; col < COLS - 2; col++) {
+                        const type = board[row][col];
+                        if (type !== -1 && 
+                            type === board[row][col+1] && 
+                            type === board[row][col+2]) {
+                            
+                            for (let i = 0; i < 3; i++) {
+                                matches.add(`${row},${col+i}`);
+                            }
+                            
+                            // Check for matches longer than 3
+                            if (col + 3 < COLS && board[row][col+3] === type) {
+                                matches.add(`${row},${col+3}`);
+                                if (col + 4 < COLS && board[row][col+4] === type) {
+                                    matches.add(`${row},${col+4}`);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Check vertical matches
+                for (let col = 0; col < COLS; col++) {
+                    for (let row = 0; row < ROWS - 2; row++) {
+                        const type = board[row][col];
+                        if (type !== -1 && 
+                            type === board[row+1][col] && 
+                            type === board[row+2][col]) {
+                            
+                            for (let i = 0; i < 3; i++) {
+                                matches.add(`${row+i},${col}`);
+                            }
+                            
+                            // Check for matches longer than 3
+                            if (row + 3 < ROWS && board[row+3][col] === type) {
+                                matches.add(`${row+3},${col}`);
+                                if (row + 4 < ROWS && board[row+4][col] === type) {
+                                    matches.add(`${row+4},${col}`);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return matches;
+            }
+            
+            // Remove matched candies and update score
+            function removeMatches() {
+                const matches = checkMatches();
+                
+                if (matches.size > 0) {
+                    // Add score based on the number of matched candies
+                    const matchPoints = matches.size * 10;
+                    score += matchPoints;
+                    scoreElement.textContent = `Score: ${score}`;
+                    
+                    // Create explosion animations for matched candies
+                    for (const match of matches) {
+                        const [row, col] = match.split(',').map(Number);
+                        const type = board[row][col];
+                        
+                        animations.push({
+                            type: 'explode',
+                            row: row,
+                            col: col,
+                            candyType: type,
+                            frame: 0,
+                            duration: ANIMATION_SPEED * 2
+                        });
+                        
+                        // Mark the cell as empty
+                        board[row][col] = -1;
+                    }
+                    
+                    return true;
+                }
+                
+                return false;
+            }
+            
+            // Fill empty spaces with new candies
+            function fillBoard() {
+                isFalling = false;
+                
+                // Move candies down to fill empty spaces
+                for (let col = 0; col < COLS; col++) {
+                    // Count empty spaces and move candies down
+                    let emptySpaces = 0;
+                    
+                    for (let row = ROWS - 1; row >= 0; row--) {
+                        if (board[row][col] === -1) {
+                            emptySpaces++;
+                        } else if (emptySpaces > 0) {
+                            // Move candy down
+                            const newRow = row + emptySpaces;
+                            const type = board[row][col];
+                            
+                            // Create fall animation
+                            animations.push({
+                                type: 'fall',
+                                startRow: row,
+                                endRow: newRow,
+                                col: col,
+                                candyType: type,
+                                frame: 0,
+                                duration: FALL_SPEED
+                            });
+                            
+                            board[newRow][col] = type;
+                            board[row][col] = -1;
+                            isFalling = true;
+                        }
+                    }
+                    
+                    // Fill top empty spaces with new candies
+                    for (let row = 0; row < ROWS; row++) {
+                        if (board[row][col] === -1) {
+                            const type = Math.floor(Math.random() * CANDY_TYPES);
+                            
+                            // Create fall animation from above the board
+                            animations.push({
+                                type: 'fall',
+                                startRow: row - 1,
+                                endRow: row,
+                                col: col,
+                                candyType: type,
+                                frame: 0,
+                                duration: FALL_SPEED
+                            });
+                            
+                            board[row][col] = type;
+                            isFalling = true;
+                        }
+                    }
+                }
+                
+                return isFalling;
+            }
+            
+            // Check if a swap will result in a match
+            function checkSwapMatch(row1, col1, row2, col2) {
+                // Temporarily swap
+                var temp = board[row1][col1];
+                board[row1][col1] = board[row2][col2];
+                board[row2][col2] = temp;
+                
+                // Check for matches
+                const matches = checkMatches();
+                
+                // Swap back
+                temp = board[row1][col1];
+                board[row1][col1] = board[row2][col2];
+                board[row2][col2] = temp;
+                
+                return matches.size > 0;
+            }
+            
+            // Swap two candies
+            function swapCandies(row1, col1, row2, col2) {
+                isSwapping = true;
+                
+                // Create swap animation
+                animations.push({
+                    type: 'swap',
+                    row1: row1,
+                    col1: col1,
+                    row2: row2,
+                    col2: col2,
+                    type1: board[row1][col1],
+                    type2: board[row2][col2],
+                    frame: 0,
+                    duration: SWAP_SPEED * 2
+                });
+                
+                // Swap the candies in the board
+                const temp = board[row1][col1];
+                board[row1][col1] = board[row2][col2];
+                board[row2][col2] = temp;
+            }
+            
+            // Game update loop
+            function update() {
+                // Handle animations
+                for (let i = animations.length - 1; i >= 0; i--) {
+                    animations[i].frame++;
+                    
+                    if (animations[i].frame >= animations[i].duration) {
+                        animations.splice(i, 1);
+                    }
+                }
+                
+                // Process game logic only when no animations are playing
+                if (animations.length === 0) {
+                    if (isSwapping) {
+                        isSwapping = false;
+                        if (!removeMatches()) {
+                            // If no matches were made, swap back
+                            const lastSwap = animations.find(a => a.type === 'swap');
+                            if (lastSwap) {
+                                swapCandies(lastSwap.row2, lastSwap.col2, lastSwap.row1, lastSwap.col1);
+                            }
+                        }
+                    } else if (isFalling) {
+                        fillBoard();
+                    } else {
+                        // Check for matches
+                        removeMatches();
+                        // Fill empty spaces
+                        if (!isFalling) {
+                            fillBoard();
+                        }
+                    }
+                }
+                
+                // Draw the game
+                drawBoard();
+                
+                // Continue the game loop
+                requestAnimationFrame(update);
+            }
+            
+            // Handle clicking on a candy
+            function handleCandyClick(row, col) {
+                if (isSwapping || isFalling || animations.length > 0) return;
+                
+                if (selectedCandy) {
+                    // If adjacent to selected candy, swap them
+                    const rowDiff = Math.abs(selectedCandy.row - row);
+                    const colDiff = Math.abs(selectedCandy.col - col);
+                    
+                    if ((rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)) {
+                        // Check if the swap will result in a match
+                        if (checkSwapMatch(selectedCandy.row, selectedCandy.col, row, col)) {
+                            swapCandies(selectedCandy.row, selectedCandy.col, row, col);
+                        }
+                    }
+                    
+                    selectedCandy = null;
+                } else {
+                    // Select the candy
+                    selectedCandy = { row, col };
+                }
+            }
+            
+            // Handle mouse/touch events
+            canvas.addEventListener('click', function(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const col = Math.floor(x / CELL_SIZE);
+                const row = Math.floor(y / CELL_SIZE);
+                
+                if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+                    handleCandyClick(row, col);
+                }
+            });
+            
+            // Handle touch start for swipe detection
+            canvas.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                touchStartX = e.touches[0].clientX - rect.left;
+                touchStartY = e.touches[0].clientY - rect.top;
+            });
+            
+            // Handle touch end for swipe detection
+            canvas.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const touchEndX = e.changedTouches[0].clientX - rect.left;
+                const touchEndY = e.changedTouches[0].clientY - rect.top;
+                
+                const diffX = touchEndX - touchStartX;
+                const diffY = touchEndY - touchStartY;
+                
+                // Calculate the starting position on the grid
+                const startCol = Math.floor(touchStartX / CELL_SIZE);
+                const startRow = Math.floor(touchStartY / CELL_SIZE);
+                
+                if (startRow < 0 || startRow >= ROWS || startCol < 0 || startCol >= COLS) {
+                    return;
+                }
+                
+                // Determine the direction of the swipe
+                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 10) {
+                    // Horizontal swipe
+                    const targetCol = startCol + (diffX > 0 ? 1 : -1);
+                    if (targetCol >= 0 && targetCol < COLS) {
+                        if (checkSwapMatch(startRow, startCol, startRow, targetCol)) {
+                            swapCandies(startRow, startCol, startRow, targetCol);
+                        }
+                    }
+                } else if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 10) {
+                    // Vertical swipe
+                    const targetRow = startRow + (diffY > 0 ? 1 : -1);
+                    if (targetRow >= 0 && targetRow < ROWS) {
+                        if (checkSwapMatch(startRow, startCol, targetRow, startCol)) {
+                            swapCandies(startRow, startCol, targetRow, startCol);
+                        }
+                    }
+                } else {
+                    // Handle as a click if it wasn't a clear swipe
+                    handleCandyClick(startRow, startCol);
+                }
+            });
+            
+            // Prevent scrolling when touching the canvas
+            canvas.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+            
+            // Restart button
+            restartButton.addEventListener('click', function() {
+                initGame();
+            });
+            
+            // Start the game
+            initGame();
+            update();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Space Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        canvas {
+            border: 2px solid #333;
+            box-shadow: 0 0 20px #0f0;
+        }
+        #gameInfo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #0f0;
+            font-size: 14px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameInfo">WASD/Arrows to move, SPACE to shoot, R to restart</div>
+    <canvas id="gameCanvas" width="600" height="800"></canvas>
+
+    <script>
+        // Game constants and variables
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const GAME_WIDTH = canvas.width;
+        const GAME_HEIGHT = canvas.height;
+        const PLAYER_SPEED = 5;
+        const PLAYER_AREA_HEIGHT = GAME_HEIGHT / 3; // Lower third of the screen
+        const MISSILE_SPEED = 10;
+        const ENEMY_SPEED = 1.5;
+        const ITEM_SPEED = 2;
+        const ITEM_DROP_CHANCE = 0.2; // 20% chance
+        const ENEMY_SPAWN_INTERVAL = 1500; // ms (increased to reduce enemy frequency)
+        const ENEMY_WAVE_SIZE = 2; // Reduced by 70% from 5 to 2
+        const WAVE_INTERVAL = 10000; // ms
+        
+        // Game state
+        let gameState = {
+            player: {
+                x: GAME_WIDTH / 2,
+                y: GAME_HEIGHT - 100,
+                width: 50,
+                height: 60,
+                hp: 10,
+                maxHp: 10,
+                speed: PLAYER_SPEED,
+                speedBoostTime: 0,
+                isSpeedBoosted: false
+            },
+            missiles: [],
+            enemies: [],
+            items: [],
+            boss: null,
+            keys: {
+                left: false,
+                right: false,
+                space: false
+            },
+            lastShot: 0,
+            shotCooldown: 250, // ms
+            score: 0,
+            wave: 1,
+            gameOver: false,
+            victory: false,
+            enemiesDefeated: 0,
+            spawnBossAt: 10, // Reduced to match fewer enemies
+            frameCount: 0,
+            starField: generateStarField()
+        };
+
+        // Generate random stars for the background
+        function generateStarField() {
+            const stars = [];
+            for (let i = 0; i < 100; i++) {
+                stars.push({
+                    x: Math.random() * GAME_WIDTH,
+                    y: Math.random() * GAME_HEIGHT,
+                    size: Math.random() * 2 + 1,
+                    speed: Math.random() * 0.5 + 0.1
+                });
+            }
+            return stars;
+        }
+
+        // Event listeners for controls
+        window.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    gameState.keys.left = true;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    gameState.keys.right = true;
+                    break;
+                case ' ':
+                    gameState.keys.space = true;
+                    break;
+                case 'r':
+                case 'R':
+                    if (gameState.gameOver || gameState.victory) {
+                        resetGame();
+                    }
+                    break;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    gameState.keys.left = false;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    gameState.keys.right = false;
+                    break;
+                case ' ':
+                    gameState.keys.space = false;
+                    break;
+            }
+        });
+
+        // Game initialization
+        function init() {
+            // Start the game loop
+            requestAnimationFrame(gameLoop);
+            
+            // Set up enemy spawning
+            setInterval(() => {
+                if (!gameState.gameOver && !gameState.victory && !gameState.boss) {
+                    spawnEnemyWave();
+                }
+            }, ENEMY_SPAWN_INTERVAL);
+        }
+
+        // Reset game state
+        function resetGame() {
+            gameState = {
+                player: {
+                    x: GAME_WIDTH / 2,
+                    y: GAME_HEIGHT - 100,
+                    width: 50,
+                    height: 60,
+                    hp: 10,
+                    maxHp: 10,
+                    speed: PLAYER_SPEED,
+                    speedBoostTime: 0,
+                    isSpeedBoosted: false
+                },
+                missiles: [],
+                enemies: [],
+                items: [],
+                boss: null,
+                keys: {
+                    left: false,
+                    right: false,
+                    space: false
+                },
+                lastShot: 0,
+                shotCooldown: 250,
+                score: 0,
+                wave: 1,
+                gameOver: false,
+                victory: false,
+                enemiesDefeated: 0,
+                spawnBossAt: 10,
+                frameCount: 0,
+                starField: generateStarField()
+            };
+        }
+
+        // Spawn a wave of enemies
+        function spawnEnemyWave() {
+            const enemyCount = ENEMY_WAVE_SIZE + Math.floor(gameState.wave / 3);
+            for (let i = 0; i < enemyCount; i++) {
+                const enemy = {
+                    x: Math.random() * (GAME_WIDTH - 40) + 20,
+                    y: -50 - Math.random() * 200, // Stagger vertical positions
+                    width: 40,
+                    height: 40,
+                    hp: 1 + Math.floor(gameState.wave / 3),
+                    speed: ENEMY_SPEED * (1 + gameState.wave * 0.1),
+                    type: Math.random() > 0.8 ? 'advanced' : 'basic'
+                };
+                gameState.enemies.push(enemy);
+            }
+            gameState.wave++;
+        }
+
+        // Spawn the boss
+        function spawnBoss() {
+            gameState.boss = {
+                x: GAME_WIDTH / 2 - 100,
+                y: 100,
+                width: 200,
+                height: 150,
+                hp: 50,
+                maxHp: 50,
+                phase: 1,
+                direction: 1,
+                speed: 1,
+                lastShot: 0,
+                shootInterval: 1000
+            };
+        }
+
+        // Game loop
+        function gameLoop(timestamp) {
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            
+            // Update and draw starfield
+            updateStarField();
+            drawStarField();
+
+            // Update game state if not game over
+            if (!gameState.gameOver && !gameState.victory) {
+                updatePlayer();
+                updateMissiles();
+                updateEnemies();
+                updateItems();
+                updateBoss(timestamp);
+                
+                // Spawn boss if enough enemies defeated
+                if (gameState.enemiesDefeated >= gameState.spawnBossAt && !gameState.boss) {
+                    spawnBoss();
+                }
+                
+                // Handle shooting
+                if (gameState.keys.space && timestamp - gameState.lastShot > gameState.shotCooldown) {
+                    shootMissile();
+                    gameState.lastShot = timestamp;
+                }
+                
+                // Check for collisions
+                checkCollisions();
+                
+                // Update speed boost duration
+                if (gameState.player.isSpeedBoosted) {
+                    gameState.player.speedBoostTime--;
+                    if (gameState.player.speedBoostTime <= 0) {
+                        gameState.player.isSpeedBoosted = false;
+                        gameState.player.speed = PLAYER_SPEED;
+                    }
+                }
+            }
+            
+            // Draw everything
+            drawPlayer();
+            drawMissiles();
+            drawEnemies();
+            drawItems();
+            drawBoss();
+            drawUI();
+            
+            // Draw game over or victory message
+            if (gameState.gameOver) {
+                drawMessage("GAME OVER", "Press R to restart");
+            } else if (gameState.victory) {
+                drawMessage("YOU WIN!", "Press R to play again");
+            }
+            
+            gameState.frameCount++;
+            
+            // Continue the game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Update star field positions
+        function updateStarField() {
+            gameState.starField.forEach(star => {
+                star.y += star.speed;
+                if (star.y > GAME_HEIGHT) {
+                    star.y = 0;
+                    star.x = Math.random() * GAME_WIDTH;
+                }
+            });
+        }
+
+        // Draw star field
+        function drawStarField() {
+            gameState.starField.forEach(star => {
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+            });
+        }
+
+        // Update player position
+        function updatePlayer() {
+            if (gameState.keys.left) {
+                gameState.player.x -= gameState.player.speed;
+            }
+            if (gameState.keys.right) {
+                gameState.player.x += gameState.player.speed;
+            }
+            
+            // Keep player within screen bounds and lower area
+            gameState.player.x = Math.max(0, Math.min(GAME_WIDTH - gameState.player.width, gameState.player.x));
+            gameState.player.y = Math.max(GAME_HEIGHT - PLAYER_AREA_HEIGHT, 
+                                          Math.min(GAME_HEIGHT - gameState.player.height, gameState.player.y));
+        }
+
+        // Update missile positions
+        function updateMissiles() {
+            gameState.missiles = gameState.missiles.filter(missile => {
+                missile.y -= MISSILE_SPEED;
+                return missile.y + missile.height > 0;
+            });
+        }
+
+        // Update enemy positions
+        function updateEnemies() {
+            gameState.enemies = gameState.enemies.filter(enemy => {
+                // Move enemy downward
+                enemy.y += enemy.speed;
+                
+                // Advanced enemies move in a sine wave pattern
+                if (enemy.type === 'advanced') {
+                    enemy.x += Math.sin(gameState.frameCount * 0.05) * 2;
+                }
+                
+                // Remove enemies that go off-screen
+                return enemy.y < GAME_HEIGHT;
+            });
+        }
+
+        // Update boss behavior
+        function updateBoss(timestamp) {
+            if (!gameState.boss) return;
+            
+            const boss = gameState.boss;
+            
+            // Move boss based on phase
+            if (boss.phase === 1) { // Side to side movement
+                boss.x += boss.speed * boss.direction;
+                
+                // Reverse direction at edges
+                if (boss.x <= 0 || boss.x + boss.width >= GAME_WIDTH) {
+                    boss.direction *= -1;
+                }
+            } else if (boss.phase === 2) { // More aggressive movement
+                boss.x += boss.speed * 1.5 * boss.direction;
+                boss.y += Math.sin(gameState.frameCount * 0.05) * 2;
+                
+                // Keep boss in reasonable bounds
+                if (boss.x <= 0 || boss.x + boss.width >= GAME_WIDTH) {
+                    boss.direction *= -1;
+                }
+                boss.y = Math.max(50, Math.min(200, boss.y));
+            }
+            
+            // Change phases based on health
+            if (boss.hp <= boss.maxHp * 0.5 && boss.phase === 1) {
+                boss.phase = 2;
+                boss.speed *= 1.5;
+            }
+            
+            // Boss shooting
+            if (timestamp - boss.lastShot > boss.shootInterval) {
+                // Create enemy projectiles
+                if (boss.phase === 1) {
+                    // Single shot
+                    gameState.enemies.push({
+                        x: boss.x + boss.width / 2 - 10,
+                        y: boss.y + boss.height,
+                        width: 20,
+                        height: 30,
+                        hp: 1,
+                        speed: ENEMY_SPEED * 2,
+                        type: 'projectile'
+                    });
+                } else {
+                    // Triple shot
+                    for (let i = -1; i <= 1; i++) {
+                        gameState.enemies.push({
+                            x: boss.x + boss.width / 2 - 10 + (i * 40),
+                            y: boss.y + boss.height,
+                            width: 20,
+                            height: 30,
+                            hp: 1,
+                            speed: ENEMY_SPEED * 2.5,
+                            type: 'projectile'
+                        });
+                    }
+                }
+                boss.lastShot = timestamp;
+            }
+        }
+
+        // Update item positions
+        function updateItems() {
+            gameState.items = gameState.items.filter(item => {
+                item.y += ITEM_SPEED;
+                return item.y < GAME_HEIGHT;
+            });
+        }
+
+        // Shoot a missile
+        function shootMissile() {
+            gameState.missiles.push({
+                x: gameState.player.x + gameState.player.width / 2 - 2,
+                y: gameState.player.y,
+                width: 4,
+                height: 16
+            });
+        }
+
+        // Check for collisions
+        function checkCollisions() {
+            // Player-item collisions
+            gameState.items = gameState.items.filter(item => {
+                if (checkCollision(gameState.player, item)) {
+                    // Apply item effect
+                    if (item.type === 'health') {
+                        gameState.player.hp = Math.min(gameState.player.maxHp, gameState.player.hp + 3);
+                    } else if (item.type === 'speed') {
+                        gameState.player.isSpeedBoosted = true;
+                        gameState.player.speed = PLAYER_SPEED * 1.5;
+                        // Speed boosts now cumulate
+                        gameState.player.speedBoostTime += 10 * 60; // Add 10 seconds (at 60 FPS)
+                    }
+                    return false;
+                }
+                return true;
+            });
+            
+            // Missile-enemy collisions
+            gameState.missiles = gameState.missiles.filter(missile => {
+                let missileHit = false;
+                
+                // Check collision with regular enemies
+                gameState.enemies = gameState.enemies.filter(enemy => {
+                    if (!missileHit && checkCollision(missile, enemy)) {
+                        enemy.hp--;
+                        missileHit = true;
+                        
+                        if (enemy.hp <= 0) {
+                            // Enemy destroyed
+                            gameState.score += enemy.type === 'advanced' ? 200 : 100;
+                            gameState.enemiesDefeated++;
+                            
+                            // Chance to drop item - now equal chance of health or speed
+                            if (Math.random() < ITEM_DROP_CHANCE) {
+                                const itemType = Math.random() < 0.5 ? 'health' : 'speed';
+                                gameState.items.push({
+                                    x: enemy.x + enemy.width / 2 - 15,
+                                    y: enemy.y,
+                                    width: 30,
+                                    height: 30,
+                                    type: itemType
+                                });
+                            }
+                            return false;
+                        }
+                        return true;
+                    }
+                    return true;
+                });
+                
+                // Check collision with boss
+                if (!missileHit && gameState.boss && checkCollision(missile, gameState.boss)) {
+                    gameState.boss.hp--;
+                    missileHit = true;
+                    gameState.score += 50;
+                    
+                    // Boss defeated
+                    if (gameState.boss.hp <= 0) {
+                        gameState.boss = null;
+                        gameState.victory = true;
+                        gameState.score += 5000;
+                    }
+                }
+                
+                return !missileHit;
+            });
+            
+            // Enemy-player collisions
+            gameState.enemies = gameState.enemies.filter(enemy => {
+                if (checkCollision(gameState.player, enemy)) {
+                    gameState.player.hp--;
+                    
+                    // Game over if player has no health
+                    if (gameState.player.hp <= 0) {
+                        gameState.gameOver = true;
+                    }
+                    
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        // Check if two objects are colliding
+        function checkCollision(objA, objB) {
+            return objA.x < objB.x + objB.width &&
+                   objA.x + objA.width > objB.x &&
+                   objA.y < objB.y + objB.height &&
+                   objA.y + objA.height > objB.y;
+        }
+
+        // Draw the player
+        function drawPlayer() {
+            // Player ship body
+            ctx.fillStyle = gameState.player.isSpeedBoosted ? '#0ff' : '#0f0';
+            ctx.beginPath();
+            ctx.moveTo(gameState.player.x + gameState.player.width / 2, gameState.player.y);
+            ctx.lineTo(gameState.player.x + gameState.player.width, gameState.player.y + gameState.player.height);
+            ctx.lineTo(gameState.player.x, gameState.player.y + gameState.player.height);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Engine flames
+            ctx.fillStyle = '#f70';
+            ctx.beginPath();
+            ctx.moveTo(gameState.player.x + gameState.player.width / 3, gameState.player.y + gameState.player.height);
+            ctx.lineTo(gameState.player.x + gameState.player.width / 2, gameState.player.y + gameState.player.height + 15 + Math.sin(gameState.frameCount * 0.2) * 5);
+            ctx.lineTo(gameState.player.x + 2 * gameState.player.width / 3, gameState.player.y + gameState.player.height);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Cockpit
+            ctx.fillStyle = '#07f';
+            ctx.beginPath();
+            ctx.arc(gameState.player.x + gameState.player.width / 2, gameState.player.y + gameState.player.height / 3, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw missiles
+        function drawMissiles() {
+            ctx.fillStyle = '#f00';
+            gameState.missiles.forEach(missile => {
+                ctx.fillRect(missile.x, missile.y, missile.width, missile.height);
+                
+                // Missile trail
+                ctx.fillStyle = '#f70';
+                ctx.beginPath();
+                ctx.moveTo(missile.x, missile.y + missile.height);
+                ctx.lineTo(missile.x + missile.width / 2, missile.y + missile.height + 10 + Math.random() * 5);
+                ctx.lineTo(missile.x + missile.width, missile.y + missile.height);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = '#f00';
+            });
+        }
+
+        // Draw enemies
+        function drawEnemies() {
+            gameState.enemies.forEach(enemy => {
+                if (enemy.type === 'basic') {
+                    // Basic enemy
+                    ctx.fillStyle = '#f00';
+                    ctx.beginPath();
+                    ctx.moveTo(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+                    ctx.lineTo(enemy.x + enemy.width, enemy.y);
+                    ctx.lineTo(enemy.x, enemy.y);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Enemy eye
+                    ctx.fillStyle = '#ff0';
+                    ctx.beginPath();
+                    ctx.arc(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (enemy.type === 'advanced') {
+                    // Advanced enemy
+                    ctx.fillStyle = '#f0f';
+                    ctx.beginPath();
+                    ctx.moveTo(enemy.x + enemy.width / 2, enemy.y);
+                    ctx.lineTo(enemy.x + enemy.width, enemy.y + enemy.height / 2);
+                    ctx.lineTo(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+                    ctx.lineTo(enemy.x, enemy.y + enemy.height / 2);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Enemy core
+                    ctx.fillStyle = '#ff0';
+                    ctx.beginPath();
+                    ctx.arc(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (enemy.type === 'projectile') {
+                    // Boss projectile
+                    ctx.fillStyle = '#f00';
+                    ctx.beginPath();
+                    ctx.moveTo(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+                    ctx.lineTo(enemy.x + enemy.width, enemy.y);
+                    ctx.lineTo(enemy.x, enemy.y);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Glowing core
+                    ctx.fillStyle = '#f70';
+                    ctx.beginPath();
+                    ctx.arc(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        // Draw items
+        function drawItems() {
+            gameState.items.forEach(item => {
+                if (item.type === 'health') {
+                    // Health item (heart)
+                    ctx.fillStyle = '#f00';
+                    ctx.beginPath();
+                    const x = item.x + item.width / 2;
+                    const y = item.y + item.height / 2;
+                    const size = item.width / 2;
+                    
+                    // Draw heart shape
+                    ctx.moveTo(x, y - size / 4);
+                    
+                    // Left curve
+                    ctx.bezierCurveTo(
+                        x - size / 2, y - size / 2,
+                        x - size, y,
+                        x, y + size / 2
+                    );
+                    
+                    // Right curve
+                    ctx.bezierCurveTo(
+                        x + size, y,
+                        x + size / 2, y - size / 2,
+                        x, y - size / 4
+                    );
+                    
+                    ctx.fill();
+                    
+                    // Add "H" text
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('H', x, y + 5);
+                } else if (item.type === 'speed') {
+                    // Speed boost item
+                    ctx.fillStyle = '#0ff';
+                    ctx.beginPath();
+                    ctx.moveTo(item.x + item.width / 2, item.y);
+                    ctx.lineTo(item.x + item.width, item.y + item.height / 2);
+                    ctx.lineTo(item.x + 3 * item.width / 4, item.y + item.height / 2);
+                    ctx.lineTo(item.x + 3 * item.width / 4, item.y + item.height);
+                    ctx.lineTo(item.x + item.width / 4, item.y + item.height);
+                    ctx.lineTo(item.x + item.width / 4, item.y + item.height / 2);
+                    ctx.lineTo(item.x, item.y + item.height / 2);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Add "S" text
+                    ctx.fillStyle = '#000';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('S', item.x + item.width / 2, item.y + item.height / 2 + 5);
+                }
+            });
+        }
+
+        // Draw boss
+        function drawBoss() {
+            if (!gameState.boss) return;
+            
+            const boss = gameState.boss;
+            
+            // Boss body
+            ctx.fillStyle = '#700';
+            ctx.beginPath();
+            ctx.moveTo(boss.x + boss.width / 2, boss.y);
+            ctx.lineTo(boss.x + boss.width, boss.y + boss.height / 3);
+            ctx.lineTo(boss.x + 3 * boss.width / 4, boss.y + boss.height);
+            ctx.lineTo(boss.x + boss.width / 4, boss.y + boss.height);
+            ctx.lineTo(boss.x, boss.y + boss.height / 3);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Boss details
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.arc(boss.x + boss.width / 2, boss.y + boss.height / 2, 40, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#ff0';
+            ctx.beginPath();
+            ctx.arc(boss.x + boss.width / 2, boss.y + boss.height / 2, 20, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Boss weapons
+            ctx.fillStyle = '#444';
+            ctx.fillRect(boss.x + boss.width / 4 - 10, boss.y + boss.height - 20, 20, 40);
+            ctx.fillRect(boss.x + 3 * boss.width / 4 - 10, boss.y + boss.height - 20, 20, 40);
+            
+            // Boss health bar
+            const healthBarWidth = boss.width;
+            const healthPercent = boss.hp / boss.maxHp;
+            
+            ctx.fillStyle = '#600';
+            ctx.fillRect(boss.x, boss.y - 20, healthBarWidth, 10);
+            
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(boss.x, boss.y - 20, healthBarWidth * healthPercent, 10);
+        }
+
+        // Draw UI elements
+        function drawUI() {
+            // Health bar
+            const healthBarWidth = 200;
+            const healthPercent = gameState.player.hp / gameState.player.maxHp;
+            
+            ctx.fillStyle = '#333';
+            ctx.fillRect(20, 20, healthBarWidth, 20);
+            
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(20, 20, healthBarWidth * healthPercent, 20);
+            
+            ctx.strokeStyle = '#fff';
+            ctx.strokeRect(20, 20, healthBarWidth, 20);
+            
+            // Health text
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`HP: ${gameState.player.hp}/${gameState.player.maxHp}`, 25, 35);
+            
+            // Score
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText(`Score: ${gameState.score}`, GAME_WIDTH - 20, 35);
+            
+            // Wave
+            ctx.textAlign = 'center';
+            ctx.fillText(`Wave: ${gameState.wave}`, GAME_WIDTH / 2, 35);
+            
+            // Speed boost indicator
+            if (gameState.player.isSpeedBoosted) {
+                ctx.fillStyle = '#0ff';
+                ctx.textAlign = 'left';
+                ctx.fillText(`SPEED BOOST: ${Math.ceil(gameState.player.speedBoostTime / 60)}s`, 20, 60);
+            }
+            
+            // Boss approach warning
+            if (gameState.enemiesDefeated >= gameState.spawnBossAt - 3 && !gameState.boss && !gameState.victory) {
+                ctx.fillStyle = '#f00';
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                
+                if (gameState.frameCount % 60 < 30) {
+                    ctx.fillText('WARNING: BOSS APPROACHING', GAME_WIDTH / 2, 80);
+                }
+            }
+        }
+
+        // Draw message (game over or victory)
+        function drawMessage(title, subtitle) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            
+            ctx.fillStyle = title === 'GAME OVER' ? '#f00' : '#0f0';
+            ctx.font = '60px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(title, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = '30px Arial';
+            ctx.fillText(subtitle, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30);
+            
+            ctx.font = '24px Arial';
+            ctx.fillText(`Final Score: ${gameState.score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 80);
+        }
+
+        // Start the game
+        init();
+    </script>
+</body>
+</html>

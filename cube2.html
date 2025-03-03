@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rotating ASCII Cube</title>
+    <style>
+        pre {
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1;
+            background: black;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <pre id="cube"></pre>
+    <script>
+        // Grid dimensions
+        const W = 80;  // Width in characters
+        const H = 40;  // Height in characters
+        const k = 0.5; // Oblique projection parameter
+
+        // Define cube vertices (unit cube centered at origin, side length 2)
+        const vertices = [
+            [-1, -1, -1], // 0
+            [-1, -1,  1], // 1
+            [-1,  1, -1], // 2
+            [-1,  1,  1], // 3
+            [ 1, -1, -1], // 4
+            [ 1, -1,  1], // 5
+            [ 1,  1, -1], // 6
+            [ 1,  1,  1]  // 7
+        ];
+
+        // Define symbols and colors for each face
+        const symbols = ['+', 'H', 'S', 'O', '#', '*'];
+        const colors = ['red', 'green', 'blue', 'yellow', 'magenta', 'cyan'];
+
+        // Define cube faces with vertex indices, symbols, and colors
+        const faces = [
+            { vertices: [0, 1, 3, 2], symbol: symbols[0], color: colors[0] }, // Front
+            { vertices: [4, 6, 7, 5], symbol: symbols[1], color: colors[1] }, // Back
+            { vertices: [0, 2, 6, 4], symbol: symbols[2], color: colors[2] }, // Left
+            { vertices: [1, 5, 7, 3], symbol: symbols[3], color: colors[3] }, // Right
+            { vertices: [0, 4, 5, 1], symbol: symbols[4], color: colors[4] }, // Bottom
+            { vertices: [2, 3, 7, 6], symbol: symbols[5], color: colors[5] }  // Top
+        ];
+
+        // Helper functions for vector and matrix operations
+        function subtract(v1, v2) {
+            return [v1[0] - v2[0], v1[1] - v2[1], v1[2] - v2[2]];
+        }
+
+        function cross(a, b) {
+            return [
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0]
+            ];
+        }
+
+        function dot(a, b) {
+            return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        }
+
+        function multiplyMatrixVector(M, v) {
+            return [
+                M[0][0] * v[0] + M[0][1] * v[1] + M[0][2] * v[2],
+                M[1][0] * v[0] + M[1][1] * v[1] + M[1][2] * v[2],
+                M[2][0] * v[0] + M[2][1] * v[1] + M[2][2] * v[2]
+            ];
+        }
+
+        function multiplyMatrices(A, B) {
+            const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+            for (let i = 0; i < 3; i++)
+                for (let j = 0; j < 3; j++)
+                    for (let k = 0; k < 3; k++)
+                        C[i][j] += A[i][k] * B[k][j];
+            return C;
+        }
+
+        // Initialize rotation angles
+        let theta_x = 0;
+        let theta_y = 0;
+
+        // Main draw function
+        function draw() {
+            // Compute rotation matrices
+            const cos_tx = Math.cos(theta_x);
+            const sin_tx = Math.sin(theta_x);
+            const Rx = [
+                [1, 0, 0],
+                [0, cos_tx, -sin_tx],
+                [0, sin_tx, cos_tx]
+            ];
+
+            const cos_ty = Math.cos(theta_y);
+            const sin_ty = Math.sin(theta_y);
+            const Ry = [
+                [cos_ty, 0, sin_ty],
+                [0, 1, 0],
+                [-sin_ty, 0, cos_ty]
+            ];
+
+            const R = multiplyMatrices(Ry, Rx);
+
+            // Rotate vertices
+            const rotated_vertices = vertices.map(v => multiplyMatrixVector(R, v));
+
+            // Initialize z-buffer grid
+            const grid = Array(W * H).fill().map(() => ({ symbol: ' ', color: 'black', z: Infinity }));
+
+            // Process each face
+            faces.forEach(face => {
+                const idx = face.vertices;
+                const v0 = rotated_vertices[idx[0]];
+                const v1 = rotated_vertices[idx[1]];
+                const v2 = rotated_vertices[idx[2]];
+
+                // Compute vectors a and b
+                const a = subtract(v1, v0);
+                const b = subtract(v2, v0);
+
+                // Compute normal N = a × b
+                const N = cross(a, b);
+
+                // For each grid cell
+                for (let gy = 0; gy < H; gy++) {
+                    const y_2d = 1 - 2 * gy / (H - 1); // Map grid_y to y_2d
+                    for (let gx = 0; gx < W; gx++) {
+                        const x_2d = -1.5 + 3 * gx / (W - 1); // Map grid_x to x_2d
+
+                        // Compute z by intersecting the line with the face's plane
+                        const denominator = N[2] - k * N[0];
+                        if (Math.abs(denominator) > 1e-6) {
+                            const numerator = N[0] * (v0[0] - x_2d) + N[1] * (v0[1] - y_2d) + N[2] * v0[2];
+                            const z = numerator / denominator;
+                            const x = x_2d - k * z;
+                            const P = [x, y_2d, z];
+
+                            // Check if P lies within the face using parameters s and t
+                            const P_v0 = subtract(P, v0);
+                            const s = dot(P_v0, a) / dot(a, a);
+                            const t = dot(P_v0, b) / dot(b, b);
+
+                            if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
+                                const cell = grid[gy * W + gx];
+                                if (z < cell.z) {
+                                    cell.z = z;
+                                    cell.symbol = face.symbol;
+                                    cell.color = face.color;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Generate HTML for display
+            let html = '';
+            for (let gy = 0; gy < H; gy++) {
+                for (let gx = 0; gx < W; gx++) {
+                    const cell = grid[gy * W + gx];
+                    html += `<span style="color: ${cell.color}">${cell.symbol}</span>`;
+                }
+                html += '\n'; // New line for each row
+            }
+            document.getElementById('cube').innerHTML = html;
+
+            // Update rotation angles
+            theta_x += 0.01;  // Rotation speed around x-axis
+            theta_y += 0.015; // Rotation speed around y-axis
+
+            // Request next frame
+            requestAnimationFrame(draw);
+        }
+
+        // Start the animation
+        draw();
+    </script>
+</body>
+</html>

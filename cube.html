@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rotating ASCII Cube</title>
+    <style>
+        pre {
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1;
+            background: black;
+            color: white;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <pre id="cube"></pre>
+    <script>
+        // Grid dimensions
+        const w = 80;  // Width in characters
+        const h = 40;  // Height in characters
+        const k = 0.5; // Projection depth factor
+
+        // Cube vertices centered at origin ([-1, -1, -1] to [1, 1, 1])
+        const vertices = [
+            [-1, -1, -1], [-1, -1, 1], [-1, 1, -1], [-1, 1, 1],
+            [1, -1, -1],  [1, -1, 1],  [1, 1, -1],  [1, 1, 1]
+        ];
+
+        // Cube edges with their 3D direction
+        const edges = [
+            { v1: 0, v2: 1, dir: 'z' }, { v1: 0, v2: 2, dir: 'y' }, { v1: 0, v2: 4, dir: 'x' },
+            { v1: 1, v2: 3, dir: 'y' }, { v1: 1, v2: 5, dir: 'x' }, { v1: 2, v2: 3, dir: 'z' },
+            { v1: 2, v2: 6, dir: 'x' }, { v1: 3, v2: 7, dir: 'x' }, { v1: 4, v2: 5, dir: 'z' },
+            { v1: 4, v2: 6, dir: 'y' }, { v1: 5, v2: 7, dir: 'y' }, { v1: 6, v2: 7, dir: 'z' }
+        ];
+
+        // Colors for each direction
+        const colors = { 'x': 'red', 'y': 'green', 'z': 'blue' };
+
+        // Rotation angles
+        let theta_x = 0;
+        let theta_y = 0;
+        const angleStep = 0.02; // Rotation speed
+
+        // Rotation matrix around X-axis
+        function rotateX(theta) {
+            const c = Math.cos(theta);
+            const s = Math.sin(theta);
+            return [
+                [1, 0, 0],
+                [0, c, -s],
+                [0, s, c]
+            ];
+        }
+
+        // Rotation matrix around Y-axis
+        function rotateY(theta) {
+            const c = Math.cos(theta);
+            const s = Math.sin(theta);
+            return [
+                [c, 0, s],
+                [0, 1, 0],
+                [-s, 0, c]
+            ];
+        }
+
+        // Multiply two 3x3 matrices
+        function multiplyMatrix(A, B) {
+            const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+            for (let i = 0; i < 3; i++)
+                for (let j = 0; j < 3; j++)
+                    for (let k = 0; k < 3; k++)
+                        C[i][j] += A[i][k] * B[k][j];
+            return C;
+        }
+
+        // Multiply a 3x3 matrix by a 3D vector
+        function multiplyMatrixVector(M, v) {
+            const result = [0, 0, 0];
+            for (let i = 0; i < 3; i++)
+                for (let k = 0; k < 3; k++)
+                    result[i] += M[i][k] * v[k];
+            return result;
+        }
+
+        // Bresenham's line algorithm to get grid points
+        function bresenham(x0, y0, x1, y1) {
+            const points = [];
+            const dx = Math.abs(x1 - x0);
+            const dy = Math.abs(y1 - y0);
+            const sx = x0 < x1 ? 1 : -1;
+            const sy = y0 < y1 ? 1 : -1;
+            let err = dx - dy;
+            let x = x0;
+            let y = y0;
+
+            while (true) {
+                points.push([x, y]);
+                if (x === x1 && y === y1) break;
+                const e2 = 2 * err;
+                if (e2 > -dy) {
+                    err -= dy;
+                    x += sx;
+                }
+                if (e2 < dx) {
+                    err += dx;
+                    y += sy;
+                }
+            }
+            return points;
+        }
+
+        // Draw the cube
+        function draw() {
+            // Compute combined rotation matrix
+            const Rx = rotateX(theta_x);
+            const Ry = rotateY(theta_y);
+            const M = multiplyMatrix(Ry, Rx);
+
+            // Rotate and project vertices
+            const projected = vertices.map(v => {
+                const v_rot = multiplyMatrixVector(M, v);
+                const x_proj = v_rot[0] + k * v_rot[2]; // Oblique projection
+                const y_proj = v_rot[1];
+                const gx = Math.floor((x_proj + 1.5) / 3 * (w - 1)); // Map [-1.5, 1.5] to [0, w-1]
+                const gy = Math.floor((y_proj + 1) / 2 * (h - 1));   // Map [-1, 1] to [0, h-1]
+                return { gx, gy };
+            });
+
+            // Initialize grid
+            const grid = Array(h).fill().map(() => Array(w).fill(' '));
+            const colorGrid = Array(h).fill().map(() => Array(w).fill('black'));
+
+            // Draw each edge
+            edges.forEach(edge => {
+                const p1 = projected[edge.v1];
+                const p2 = projected[edge.v2];
+                const dx = p2.gx - p1.gx;
+                const dy = p2.gy - p1.gy;
+
+                // Determine ASCII character based on slope
+                let char;
+                if (dx === 0) {
+                    char = '|';
+                } else {
+                    const absDx = Math.abs(dx);
+                    const absDy = Math.abs(dy);
+                    if (absDx > 2 * absDy) {
+                        char = '-';
+                    } else if (absDy > 2 * absDx) {
+                        char = '|';
+                    } else if ((dx > 0 && dy > 0) || (dx < 0 && dy < 0)) {
+                        char = '\\';
+                    } else {
+                        char = '/';
+                    }
+                }
+
+                // Draw the line
+                const points = bresenham(p1.gx, p1.gy, p2.gx, p2.gy);
+                const edgeColor = colors[edge.dir];
+                points.forEach(([gx, gy]) => {
+                    if (gx >= 0 && gx < w && gy >= 0 && gy < h) {
+                        grid[gy][gx] = char;
+                        colorGrid[gy][gx] = edgeColor;
+                    }
+                });
+            });
+
+            // Generate HTML
+            let html = '';
+            for (let gy = 0; gy < h; gy++) {
+                for (let gx = 0; gx < w; gx++) {
+                    const char = grid[gy][gx];
+                    const color = colorGrid[gy][gx];
+                    html += `<span style="color: ${color}">${char}</span>`;
+                }
+                html += '<br>';
+            }
+            document.getElementById('cube').innerHTML = html;
+
+            // Update rotation angles
+            theta_x += angleStep;
+            theta_y += angleStep * 1.5; // Different speed for y-axis
+
+            // Request next frame
+            requestAnimationFrame(draw);
+        }
+
+        // Start the animation
+        draw();
+    </script>
+</body>
+</html>

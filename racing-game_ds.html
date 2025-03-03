@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>2D Racing Game</title>
+    <style>
+        canvas { border: 1px solid black; }
+        body { display: flex; flex-direction: column; align-items: center; }
+        .hud { font-family: Arial; margin: 10px; }
+    </style>
+</head>
+<body>
+    <div class="hud">
+        <span>Coins: <span id="coins">0</span></span>
+        <span>Speed Boost: <span id="boost">0s</span></span>
+        <span>Current Lap: <span id="currentTime">0.00</span>s</span>
+        <span>Best Lap: <span id="bestTime">0.00</span>s</span>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const CAR_SIZE = { width: 30, height: 15 };
+const TRACK_WIDTH = 100;
+const MAX_SPEED = 5;
+const BOOST_MULTIPLIER = 1.5;
+const BRAKE_TIME_TO_REVERSE = 500;
+
+let car = {
+    x: 400, y: 300,
+    angle: 0,
+    speed: 0,
+    acceleration: 0.2,
+    brakeForce: 0.3,
+    reverse: false,
+    brakeStart: 0
+};
+
+let controls = { up: false, down: false, left: false, right: false };
+let coins = 0;
+let speedBoost = 0;
+let lapStart = Date.now();
+let bestTime = 0;
+let checkpoints = [];
+let currentCheckpoint = 0;
+
+// Track definition
+const track = [
+    {x: 400, y: 300}, {x: 600, y: 300}, {x: 700, y: 400}, 
+    {x: 600, y: 500}, {x: 400, y: 500}, {x: 300, y: 400}
+];
+
+// Items (coins and boosts)
+let items = [
+    {type: 'coin', x: 500, y: 300, active: true},
+    {type: 'coin', x: 400, y: 400, active: true},
+    {type: 'boost', x: 600, y: 400, active: true},
+    {type: 'coin', x: 400, y: 450, active: true}
+];
+
+function initCheckpoints() {
+    checkpoints = [];
+    for(let i = 0; i < track.length; i++) {
+        const next = (i + 1) % track.length;
+        checkpoints.push({
+            start: track[i],
+            end: track[next],
+            passed: false
+        });
+    }
+}
+
+function updateCar(delta) {
+    // Acceleration
+    if(controls.up) {
+        car.speed = Math.min(car.speed + car.acceleration * delta, 
+                           MAX_SPEED * (speedBoost > 0 ? BOOST_MULTIPLIER : 1));
+    }
+    
+    // Braking
+    if(controls.down) {
+        car.speed = Math.max(car.speed - car.brakeForce * delta, -MAX_SPEED/2);
+        if(car.speed === 0) {
+            if(!car.reverse) car.brakeStart = Date.now();
+            if(Date.now() - car.brakeStart > BRAKE_TIME_TO_REVERSE) {
+                car.reverse = true;
+            }
+        }
+    } else {
+        car.reverse = false;
+    }
+
+    // Natural deceleration
+    if(!controls.up && !controls.down) {
+        car.speed *= 0.98;
+        if(Math.abs(car.speed) < 0.1) car.speed = 0;
+    }
+
+    // Steering
+    if(controls.left) car.angle -= 0.05 * delta * Math.abs(car.speed);
+    if(controls.right) car.angle += 0.05 * delta * Math.abs(car.speed);
+
+    // Movement
+    car.x += Math.cos(car.angle) * car.speed;
+    car.y += Math.sin(car.angle) * car.speed;
+}
+
+function checkCheckpoints() {
+    checkpoints.forEach((cp, index) => {
+        if(!cp.passed && isPointInLine(car.x, car.y, cp.start, cp.end)) {
+            cp.passed = true;
+            currentCheckpoint = index;
+        }
+    });
+}
+
+function isPointInLine(px, py, start, end) {
+    const d1 = Math.hypot(px - start.x, py - start.y);
+    const d2 = Math.hypot(px - end.x, py - end.y);
+    const lineLen = Math.hypot(start.x - end.x, start.y - end.y);
+    return Math.abs(d1 + d2 - lineLen) < 10;
+}
+
+function checkItems() {
+    items.forEach(item => {
+        if(item.active && Math.hypot(car.x - item.x, car.y - item.y) < 20) {
+            item.active = false;
+            if(item.type === 'coin') coins++;
+            if(item.type === 'boost') speedBoost = 2;
+            updateHUD();
+        }
+    });
+}
+
+function checkLapCompletion() {
+    const finishLine = checkpoints[0];
+    if(checkpoints.every(cp => cp.passed) && 
+       isPointInLine(car.x, car.y, finishLine.start, finishLine.end)) {
+        const lapTime = (Date.now() - lapStart) / 1000;
+        if(!bestTime || lapTime < bestTime) bestTime = lapTime;
+        lapStart = Date.now();
+        checkpoints.forEach(cp => cp.passed = false);
+        items.forEach(item => item.active = true);
+        updateHUD();
+    }
+}
+
+function updateHUD() {
+    document.getElementById('coins').textContent = coins;
+    document.getElementById('boost').textContent = speedBoost.toFixed(1);
+    document.getElementById('currentTime').textContent = 
+        ((Date.now() - lapStart)/1000).toFixed(2);
+    document.getElementById('bestTime').textContent = bestTime.toFixed(2);
+}
+
+function drawCar() {
+    ctx.save();
+    ctx.translate(car.x, car.y);
+    ctx.rotate(car.angle);
+    
+    // Car body
+    ctx.fillStyle = '#44f';
+    ctx.fillRect(-CAR_SIZE.width/2, -CAR_SIZE.height/2, CAR_SIZE.width, CAR_SIZE.height);
+    
+    // Direction arrow
+    ctx.fillStyle = '#ff0';
+    ctx.beginPath();
+    ctx.moveTo(CAR_SIZE.width/2 - 10, 0);
+    ctx.lineTo(CAR_SIZE.width/2, -5);
+    ctx.lineTo(CAR_SIZE.width/2, 5);
+    ctx.fill();
+    
+    ctx.restore();
+}
+
+function drawTrack() {
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = TRACK_WIDTH;
+    ctx.beginPath();
+    track.forEach((point, index) => {
+        if(index === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function drawItems() {
+    items.forEach(item => {
+        if(!item.active) return;
+        ctx.fillStyle = item.type === 'coin' ? '#gold' : '#f00';
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, 10, 0, Math.PI*2);
+        ctx.fill();
+    });
+}
+
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const delta = 1; // Simplified delta time for example
+    if(speedBoost > 0) speedBoost -= delta/60;
+    
+    updateCar(delta);
+    checkCheckpoints();
+    checkItems();
+    checkLapCompletion();
+    
+    drawTrack();
+    drawItems();
+    drawCar();
+    requestAnimationFrame(gameLoop);
+}
+
+// Event listeners
+document.addEventListener('keydown', (e) => {
+    if(e.key === 'w' || e.key === 'ArrowUp') controls.up = true;
+    if(e.key === 's' || e.key === 'ArrowDown') controls.down = true;
+    if(e.key === 'a' || e.key === 'ArrowLeft') controls.left = true;
+    if(e.key === 'd' || e.key === 'ArrowRight') controls.right = true;
+    if(e.key === 'r') {
+        car = { ...car, x: 400, y: 300, speed: 0, angle: 0 };
+        lapStart = Date.now();
+        checkpoints.forEach(cp => cp.passed = false);
+        items.forEach(item => item.active = true);
+        coins = 0;
+        speedBoost = 0;
+        updateHUD();
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if(e.key === 'w' || e.key === 'ArrowUp') controls.up = false;
+    if(e.key === 's' || e.key === 'ArrowDown') controls.down = false;
+    if(e.key === 'a' || e.key === 'ArrowLeft') controls.left = false;
+    if(e.key === 'd' || e.key === 'ArrowRight') controls.right = false;
+});
+
+initCheckpoints();
+gameLoop();
+</script>
+</body>
+</html>

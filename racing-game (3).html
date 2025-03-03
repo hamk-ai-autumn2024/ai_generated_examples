@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Top-Down 2D Racing Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #333;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            margin: 20px auto;
+            background-color: #222;
+        }
+        #gameInfo {
+            color: white;
+            text-align: center;
+            margin: 10px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameInfo">
+        Current Time: <span id="currentTime">0.00</span>s | 
+        Best Time: <span id="bestTime">N/A</span>s | 
+        Coins: <span id="coinCount">0</span>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // Canvas Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+
+        // Game Variables
+        let car = {
+            x: 400,
+            y: 400,
+            width: 20,
+            height: 30,
+            angle: -Math.PI/2, // Start facing up
+            speed: 0,
+            acceleration: 0.2,
+            maxSpeed: 4,
+            friction: 0.05,
+            rotationSpeed: 0.06,
+            isBoost: false,
+            boostTimer: 0,
+            checkpointsPassed: 0,
+            totalCheckpoints: 3
+        };
+
+        // Track definition - Made wider by adjusting inner path
+        const track = {
+            outerPath: [
+                {x: 200, y: 500}, {x: 200, y: 150}, {x: 300, y: 100}, 
+                {x: 500, y: 100}, {x: 600, y: 150}, {x: 600, y: 300},
+                {x: 700, y: 400}, {x: 700, y: 500}, {x: 600, y: 550},
+                {x: 400, y: 550}, {x: 300, y: 500}
+            ],
+            innerPath: [
+                {x: 320, y: 430}, {x: 320, y: 220}, {x: 360, y: 200}, 
+                {x: 440, y: 200}, {x: 480, y: 220}, {x: 480, y: 300},
+                {x: 520, y: 350}, {x: 570, y: 420}, {x: 500, y: 450},
+                {x: 400, y: 430}
+            ],
+            finishLine: {
+                start: {x: 300, y: 500},
+                end: {x: 400, y: 430}
+            },
+            checkpoints: [
+                {start: {x: 350, y: 100}, end: {x: 440, y: 200}},
+                {start: {x: 600, y: 300}, end: {x: 480, y: 300}},
+                {start: {x: 700, y: 450}, end: {x: 570, y: 420}}
+            ],
+            // Pre-calculate normal vectors for collision detection
+            outerEdges: [],
+            innerEdges: []
+        };
+
+        // Calculate edges for collision detection
+        function calculateEdges() {
+            // Outer edges
+            for (let i = 0; i < track.outerPath.length; i++) {
+                const start = track.outerPath[i];
+                const end = track.outerPath[(i + 1) % track.outerPath.length];
+                track.outerEdges.push({start, end});
+            }
+            
+            // Inner edges
+            for (let i = 0; i < track.innerPath.length; i++) {
+                const start = track.innerPath[i];
+                const end = track.innerPath[(i + 1) % track.innerPath.length];
+                track.innerEdges.push({start, end});
+            }
+        }
+        calculateEdges();
+
+        // Collectibles - Repositioned to ensure they're within the track
+        let coins = [
+            {x: 220, y: 350, radius: 10, collected: false},
+            {x: 280, y: 250, radius: 10, collected: false},
+            {x: 450, y: 150, radius: 10, collected: false},
+            {x: 650, y: 450, radius: 10, collected: false},
+        ];
+
+        let speedBoosts = [
+            {x: 380, y: 450, radius: 15, collected: false},
+            {x: 540, y: 250, radius: 15, collected: false}
+        ];
+
+        // Game state
+        let keys = {};
+        let gameTime = 0;
+        let bestTime = Infinity;
+        let lapStarted = false;
+        let lapCompleted = false;
+        let coinCount = 0;
+        let lastTimestamp = 0;
+        let lastCheckpointPassed = -1;
+
+        // Controls
+        window.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        // Helper functions
+        function distanceToLine(point, line) {
+            const x1 = line.start.x;
+            const y1 = line.start.y;
+            const x2 = line.end.x;
+            const y2 = line.end.y;
+            const x0 = point.x;
+            const y0 = point.y;
+            
+            // Calculate distance from point to line
+            const numerator = Math.abs((y2-y1)*x0 - (x2-x1)*y0 + x2*y1 - y2*x1);
+            const denominator = Math.sqrt((y2-y1)**2 + (x2-x1)**2);
+            return numerator / denominator;
+        }
+
+        function isPointInSegment(point, line) {
+            // Check if point is near the line segment (not just the infinite line)
+            const dotProduct = ((point.x - line.start.x) * (line.end.x - line.start.x) + 
+                               (point.y - line.start.y) * (line.end.y - line.start.y));
+            const segmentLengthSquared = (line.end.x - line.start.x)**2 + (line.end.y - line.start.y)**2;
+            
+            if (dotProduct < 0 || dotProduct > segmentLengthSquared) {
+                return false;
+            }
+            
+            return true;
+        }
+
+        function crossesLine(oldPos, newPos, line) {
+            // Check if a movement from oldPos to newPos crosses the line
+            function ccw(A, B, C) {
+                return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+            }
+            
+            const A = oldPos;
+            const B = newPos;
+            const C = line.start;
+            const D = line.end;
+            
+            return ccw(A, C, D) !== ccw(B, C, D) && ccw(A, B, C) !== ccw(A, B, D);
+        }
+
+        // Draw functions
+        function drawTrack() {
+            // Outer track
+            ctx.beginPath();
+            ctx.moveTo(track.outerPath[0].x, track.outerPath[0].y);
+            for (let i = 1; i < track.outerPath.length; i++) {
+                ctx.lineTo(track.outerPath[i].x, track.outerPath[i].y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = '#444';
+            ctx.fill();
+
+            // Inner track (cutout)
+            ctx.beginPath();
+            ctx.moveTo(track.innerPath[0].x, track.innerPath[0].y);
+            for (let i = 1; i < track.innerPath.length; i++) {
+                ctx.lineTo(track.innerPath[i].x, track.innerPath[i].y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = '#222';
+            ctx.fill();
+
+            // Finish line
+            ctx.beginPath();
+            ctx.moveTo(track.finishLine.start.x, track.finishLine.start.y);
+            ctx.lineTo(track.finishLine.end.x, track.finishLine.end.y);
+            ctx.strokeStyle = '#FFF';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+            
+            // Draw checkpoints (invisible)
+            // Removed visible checkpoints as requested
+        }
+
+        function drawCar() {
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.angle);
+            
+            // Car body
+            ctx.fillStyle = car.isBoost ? '#F80' : '#F00';
+            ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+            
+            // Direction arrow
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath();
+            ctx.moveTo(0, -car.height / 2 - 5);
+            ctx.lineTo(5, -car.height / 2 + 5);
+            ctx.lineTo(-5, -car.height / 2 + 5);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        function drawCollectibles() {
+            // Draw coins
+            for (const coin of coins) {
+                if (!coin.collected) {
+                    ctx.beginPath();
+                    ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fill();
+                }
+            }
+
+            // Draw speed boosts
+            for (const boost of speedBoosts) {
+                if (!boost.collected) {
+                    ctx.beginPath();
+                    ctx.arc(boost.x, boost.y, boost.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#00F';
+                    ctx.fill();
+                    
+                    // Draw lightning symbol
+                    ctx.beginPath();
+                    ctx.moveTo(boost.x - 5, boost.y - 7);
+                    ctx.lineTo(boost.x + 3, boost.y - 2);
+                    ctx.lineTo(boost.x - 2, boost.y);
+                    ctx.lineTo(boost.x + 5, boost.y + 7);
+                    ctx.strokeStyle = '#FFF';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function updateHUD() {
+            if (lapStarted && !lapCompleted) {
+                document.getElementById('currentTime').textContent = gameTime.toFixed(2);
+            }
+            document.getElementById('bestTime').textContent = bestTime === Infinity ? 'N/A' : bestTime.toFixed(2);
+            document.getElementById('coinCount').textContent = coinCount;
+        }
+
+        // Game logic
+        function updateCar(deltaTime) {
+            // Handle speed boost
+            if (car.isBoost) {
+                car.boostTimer -= deltaTime;
+                if (car.boostTimer <= 0) {
+                    car.isBoost = false;
+                    car.maxSpeed = 4;
+                }
+            }
+
+            // Turning
+            if (keys['a'] || keys['arrowleft']) {
+                car.angle -= car.rotationSpeed;
+            }
+            if (keys['d'] || keys['arrowright']) {
+                car.angle += car.rotationSpeed;
+            }
+
+            // Acceleration and braking
+            if (keys['w'] || keys['arrowup']) {
+                car.speed += car.acceleration;
+            } else if (keys['s'] || keys['arrowdown']) {
+                if (car.speed > 0) {
+                    car.speed -= car.acceleration * 2;
+                } else if (car.speed === 0) {
+                    // Create a small delay before going in reverse
+                    car.speed = -2;
+                } else {
+                    car.speed = Math.max(car.speed, -2); // Maximum reverse speed
+                }
+            } else {
+                // Apply friction if no key is pressed
+                if (car.speed > 0) {
+                    car.speed = Math.max(0, car.speed - car.friction);
+                } else if (car.speed < 0) {
+                    car.speed = Math.min(0, car.speed + car.friction);
+                }
+            }
+
+            // Limit speed
+            const maxSpeed = car.isBoost ? car.maxSpeed * 1.5 : car.maxSpeed;
+            car.speed = Math.min(maxSpeed, Math.max(car.speed, -maxSpeed/2));
+
+            // Store old position for collision detection
+            const oldX = car.x;
+            const oldY = car.y;
+
+            // Update position
+            const newX = car.x + Math.sin(car.angle) * car.speed;
+            const newY = car.y - Math.cos(car.angle) * car.speed;
+            
+            // Check if this movement would cause a collision
+            const carPoint = {x: newX, y: newY};
+            let collision = false;
+            
+            // Check outer track edges
+            for (const edge of track.outerEdges) {
+                const distance = distanceToLine(carPoint, edge);
+                if (distance < car.width/2 && isPointInSegment(carPoint, edge)) {
+                    collision = true;
+                    break;
+                }
+            }
+            
+            // Check inner track edges
+            for (const edge of track.innerEdges) {
+                const distance = distanceToLine(carPoint, edge);
+                if (distance < car.width/2 && isPointInSegment(carPoint, edge)) {
+                    collision = true;
+                    break;
+                }
+            }
+            
+            // Update position if no collision
+            if (!collision) {
+                car.x = newX;
+                car.y = newY;
+            } else {
+                // If collision, stop the car
+                car.speed = 0;
+            }
+
+            // Reset button
+            if (keys['r']) {
+                resetGame();
+            }
+        }
+
+        function checkCollisions() {
+            // Check for checkpoints
+            for (let i = 0; i < track.checkpoints.length; i++) {
+                const checkpoint = track.checkpoints[i];
+                const prevCP = lastCheckpointPassed;
+                
+                // Only check the next checkpoint in sequence
+                if ((prevCP === -1 && i === 0) || (prevCP === i - 1) || 
+                    (prevCP === track.checkpoints.length - 1 && i === 0)) {
+                    const carPoint = {x: car.x, y: car.y};
+                    const cpLine = {start: checkpoint.start, end: checkpoint.end};
+                    
+                    const distance = distanceToLine(carPoint, cpLine);
+                    if (distance < car.width && isPointInSegment(carPoint, cpLine)) {
+                        lastCheckpointPassed = i;
+                        if (!lapStarted) {
+                            lapStarted = true;
+                            gameTime = 0;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Check for finish line (complete lap)
+            const carPoint = {x: car.x, y: car.y};
+            const finishLine = {start: track.finishLine.start, end: track.finishLine.end};
+            const distance = distanceToLine(carPoint, finishLine);
+            
+            if (lapStarted && 
+                !lapCompleted && 
+                distance < car.width && 
+                isPointInSegment(carPoint, finishLine) &&
+                lastCheckpointPassed === track.checkpoints.length - 1) {
+                lapCompleted = true;
+                if (gameTime < bestTime) {
+                    bestTime = gameTime;
+                }
+                setTimeout(() => {
+                    resetLap();
+                }, 1000);
+            }
+
+            // Check for coin collection
+            for (const coin of coins) {
+                if (!coin.collected) {
+                    const dx = car.x - coin.x;
+                    const dy = car.y - coin.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < coin.radius + car.width/2) {
+                        coin.collected = true;
+                        coinCount++;
+                    }
+                }
+            }
+
+            // Check for speed boost collection
+            for (const boost of speedBoosts) {
+                if (!boost.collected) {
+                    const dx = car.x - boost.x;
+                    const dy = car.y - boost.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < boost.radius + car.width/2) {
+                        boost.collected = true;
+                        car.isBoost = true;
+                        car.boostTimer = 2; // 2 seconds
+                        car.maxSpeed = 4;
+                    }
+                }
+            }
+        }
+
+        function resetLap() {
+            lapStarted = false;
+            lapCompleted = false;
+            lastCheckpointPassed = -1;
+            gameTime = 0;
+            // reset collectibles
+            coins.forEach(coin => coin.collected = false);
+            speedBoosts.forEach(boost => boost.collected = false);
+        }
+
+        function resetGame() {
+            car.x = 350; // Position car near start line
+            car.y = 475;
+            car.angle = -Math.PI/2;
+            car.speed = 0;
+            car.isBoost = false;
+            car.boostTimer = 0;
+            
+            lapStarted = false;
+            lapCompleted = false;
+            lastCheckpointPassed = -1;
+            gameTime = 0;
+            
+            // Reset collectibles
+            coins.forEach(coin => coin.collected = false);
+            speedBoosts.forEach(boost => boost.collected = false);
+            coinCount = 0;
+        }
+
+        // Game loop
+        function gameLoop(timestamp) {
+            // Calculate delta time
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const deltaTime = (timestamp - lastTimestamp) / 1000; // Convert to seconds
+            lastTimestamp = timestamp;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Update game time if lap has started but not completed
+            if (lapStarted && !lapCompleted) {
+                gameTime += deltaTime;
+            }
+            
+            // Draw game elements
+            drawTrack();
+            drawCollectibles();
+            drawCar();
+            
+            // Update game state
+            updateCar(deltaTime);
+            checkCollisions();
+            updateHUD();
+            
+            // Schedule the next frame
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        resetGame();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

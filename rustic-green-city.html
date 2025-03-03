@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rustic Green 3D City</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #instructions {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      max-width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="instructions">
+    <h3>Controls:</h3>
+    <p>WASD or Arrow Keys: Move</p>
+    <p>Space: Jump</p>
+    <p>Mouse: Look around</p>
+    <p>R: Reset position</p>
+    <p>Click to enable controls</p>
+  </div>
+
+  <script>
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+    
+    // Camera setup
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const initialPosition = { x: 0, y: 2, z: 10 };
+    camera.position.set(initialPosition.x, initialPosition.y, initialPosition.z);
+    
+    // Renderer setup
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+    
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(100, 100, 50);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    scene.add(directionalLight);
+    
+    // Ground
+    const groundGeometry = new THREE.PlaneGeometry(100, 100);
+    const groundMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x4C9A2A,
+      roughness: 0.8,
+      metalness: 0.2
+    });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    
+    // Buildings array to check for collisions
+    const buildings = [];
+    
+    // Function to create a random building
+    function createBuilding(x, z, width, height, depth) {
+      const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+      
+      // Rustic building material
+      const buildingMaterial = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(0.1 + Math.random() * 0.1, 0.3 + Math.random() * 0.2, 0.1 + Math.random() * 0.1),
+        roughness: 0.9,
+        metalness: 0.1
+      });
+      
+      const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+      building.position.set(x, height / 2, z);
+      building.castShadow = true;
+      building.receiveShadow = true;
+      
+      // Store collision information
+      building.userData = {
+        minX: x - width / 2,
+        maxX: x + width / 2,
+        minZ: z - depth / 2,
+        maxZ: z + depth / 2,
+        width: width,
+        depth: depth
+      };
+      
+      buildings.push(building);
+      scene.add(building);
+      
+      // Add a rustic roof
+      const roofGeometry = new THREE.ConeGeometry(Math.max(width, depth) * 0.7, height * 0.3, 4);
+      const roofMaterial = new THREE.MeshStandardMaterial({
+        color: 0x604020,
+        roughness: 0.8,
+        metalness: 0.2
+      });
+      const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+      roof.position.y = height + height * 0.15;
+      roof.rotation.y = Math.PI / 4;
+      building.add(roof);
+      
+      // Randomly add windows
+      const windowsCount = Math.floor(Math.random() * 5) + 2;
+      for (let i = 0; i < windowsCount; i++) {
+        const windowGeometry = new THREE.PlaneGeometry(0.5, 0.7);
+        const windowMaterial = new THREE.MeshStandardMaterial({
+          color: 0xFFFFAA,
+          emissive: 0x555533,
+          roughness: 0.5,
+          metalness: 0.7,
+          side: THREE.DoubleSide
+        });
+        
+        const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
+        
+        // Place on random side of building
+        const side = Math.floor(Math.random() * 4);
+        switch(side) {
+          case 0: // Front
+            windowMesh.position.set(Math.random() * width - width/2, Math.random() * (height-1) + 1, depth/2 + 0.05);
+            break;
+          case 1: // Back
+            windowMesh.position.set(Math.random() * width - width/2, Math.random() * (height-1) + 1, -depth/2 - 0.05);
+            windowMesh.rotation.y = Math.PI;
+            break;
+          case 2: // Left
+            windowMesh.position.set(-width/2 - 0.05, Math.random() * (height-1) + 1, Math.random() * depth - depth/2);
+            windowMesh.rotation.y = -Math.PI/2;
+            break;
+          case 3: // Right
+            windowMesh.position.set(width/2 + 0.05, Math.random() * (height-1) + 1, Math.random() * depth - depth/2);
+            windowMesh.rotation.y = Math.PI/2;
+            break;
+        }
+        
+        building.add(windowMesh);
+      }
+      
+      // Add a door on one side
+      const doorGeometry = new THREE.PlaneGeometry(0.8, 1.5);
+      const doorMaterial = new THREE.MeshStandardMaterial({
+        color: 0x483018,
+        roughness: 0.9,
+        metalness: 0.1,
+        side: THREE.DoubleSide
+      });
+      
+      const door = new THREE.Mesh(doorGeometry, doorMaterial);
+      
+      // Place door on random side
+      const doorSide = Math.floor(Math.random() * 4);
+      switch(doorSide) {
+        case 0: // Front
+          door.position.set(0, 0.75, depth/2 + 0.05);
+          break;
+        case 1: // Back
+          door.position.set(0, 0.75, -depth/2 - 0.05);
+          door.rotation.y = Math.PI;
+          break;
+        case 2: // Left
+          door.position.set(-width/2 - 0.05, 0.75, 0);
+          door.rotation.y = -Math.PI/2;
+          break;
+        case 3: // Right
+          door.position.set(width/2 + 0.05, 0.75, 0);
+          door.rotation.y = Math.PI/2;
+          break;
+      }
+      
+      building.add(door);
+      
+      return building;
+    }
+    
+    // Generate city layout
+    function generateCity() {
+      // Clear existing buildings
+      for (let i = buildings.length - 1; i >= 0; i--) {
+        scene.remove(buildings[i]);
+      }
+      buildings.length = 0;
+      
+      // Generate new buildings in a grid pattern
+      const gridSize = 6;
+      const spacing = 15;
+      
+      for (let x = -gridSize; x <= gridSize; x++) {
+        for (let z = -gridSize; z <= gridSize; z++) {
+          // Skip center area to create a town square
+          if (Math.abs(x) < 2 && Math.abs(z) < 2) continue;
+          
+          // Only place buildings with 70% probability
+          if (Math.random() < 0.7) {
+            const posX = x * spacing;
+            const posZ = z * spacing;
+            const width = 2 + Math.random() * 3;
+            const height = 2 + Math.random() * 4;
+            const depth = 2 + Math.random() * 3;
+            
+            createBuilding(posX, posZ, width, height, depth);
+          }
+        }
+      }
+      
+      // Add some trees
+      for (let i = 0; i < 40; i++) {
+        const x = (Math.random() - 0.5) * 100;
+        const z = (Math.random() - 0.5) * 100;
+        
+        // Check if we're too close to a building
+        let tooClose = false;
+        for (const building of buildings) {
+          const dx = x - building.position.x;
+          const dz = z - building.position.z;
+          const distance = Math.sqrt(dx*dx + dz*dz);
+          if (distance < Math.max(building.userData.width, building.userData.depth) + 1) {
+            tooClose = true;
+            break;
+          }
+        }
+        
+        if (!tooClose) {
+          createTree(x, z);
+        }
+      }
+    }
+    
+    function createTree(x, z) {
+      // Tree trunk
+      const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8);
+      const trunkMaterial = new THREE.MeshStandardMaterial({
+        color: 0x59332e,
+        roughness: 0.9,
+        metalness: 0.1
+      });
+      const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+      trunk.position.set(x, 0.75, z);
+      trunk.castShadow = true;
+      trunk.receiveShadow = true;
+      scene.add(trunk);
+      
+      // Tree leaves
+      const leavesGeometry = new THREE.ConeGeometry(1, 2, 8);
+      const leavesMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2d4c1e,
+        roughness: 0.8,
+        metalness: 0.2
+      });
+      
+      const leaves1 = new THREE.Mesh(leavesGeometry, leavesMaterial);
+      leaves1.position.y = 1.5;
+      leaves1.castShadow = true;
+      trunk.add(leaves1);
+      
+      const leaves2 = new THREE.Mesh(leavesGeometry, leavesMaterial);
+      leaves2.position.y = 2;
+      leaves2.scale.set(0.8, 0.8, 0.8);
+      trunk.add(leaves2);
+      
+      const leaves3 = new THREE.Mesh(leavesGeometry, leavesMaterial);
+      leaves3.position.y = 2.5;
+      leaves3.scale.set(0.6, 0.6, 0.6);
+      trunk.add(leaves3);
+      
+      // Store tree for collision detection
+      buildings.push({
+        position: trunk.position,
+        userData: {
+          minX: trunk.position.x - 0.3,
+          maxX: trunk.position.x + 0.3,
+          minZ: trunk.position.z - 0.3,
+          maxZ: trunk.position.z + 0.3,
+          width: 0.6,
+          depth: 0.6
+        }
+      });
+    }
+    
+    // Generate the city
+    generateCity();
+    
+    // Player physics
+    const player = {
+      height: 1.8,
+      radius: 0.5,
+      position: new THREE.Vector3(initialPosition.x, initialPosition.y, initialPosition.z),
+      velocity: new THREE.Vector3(),
+      onGround: true,
+      direction: new THREE.Vector3(),
+      speed: 0.15,
+      jumpStrength: 0.3
+    };
+    
+    // Controls setup
+    const lockControls = function() {
+      renderer.domElement.requestPointerLock = renderer.domElement.requestPointerLock ||
+                                               renderer.domElement.mozRequestPointerLock;
+      renderer.domElement.requestPointerLock();
+    };
+    
+    let controlsEnabled = false;
+    
+    document.addEventListener('click', function() {
+      if (!controlsEnabled) {
+        lockControls();
+      }
+    });
+    
+    const onPointerLockChange = function() {
+      controlsEnabled = (document.pointerLockElement === renderer.domElement ||
+                         document.mozPointerLockElement === renderer.domElement);
+    };
+    
+    document.addEventListener('pointerlockchange', onPointerLockChange);
+    document.addEventListener('mozpointerlockchange', onPointerLockChange);
+    
+    // Movement controls
+    const keys = {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+      jump: false,
+      reset: false
+    };
+    
+    const onKeyDown = function(event) {
+      switch (event.code) {
+        case 'KeyW':
+        case 'ArrowUp':
+          keys.forward = true;
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          keys.backward = true;
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          keys.left = true;
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          keys.right = true;
+          break;
+        case 'Space':
+          keys.jump = true;
+          break;
+        case 'KeyR':
+          resetPlayer();
+          break;
+      }
+    };
+    
+    const onKeyUp = function(event) {
+      switch (event.code) {
+        case 'KeyW':
+        case 'ArrowUp':
+          keys.forward = false;
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          keys.backward = false;
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          keys.left = false;
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          keys.right = false;
+          break;
+        case 'Space':
+          keys.jump = false;
+          break;
+      }
+    };
+    
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    
+    // Mouse look controls
+    const onMouseMove = function(event) {
+      if (controlsEnabled) {
+        const movementX = event.movementX || event.mozMovementX || 0;
+        const movementY = event.movementY || event.mozMovementY || 0;
+        
+        // Rotate camera based on mouse movement
+        camera.rotation.y -= movementX * 0.002;
+        
+        // Limit vertical look
+        const verticalLook = camera.rotation.x - movementY * 0.002;
+        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, verticalLook));
+      }
+    };
+    
+    document.addEventListener('mousemove', onMouseMove);
+    
+    // Function to reset player position
+    function resetPlayer() {
+      player.position.set(initialPosition.x, initialPosition.y, initialPosition.z);
+      player.velocity.set(0, 0, 0);
+      camera.rotation.set(0, 0, 0);
+    }
+    
+    // Collision detection
+    function checkCollision(newPosition) {
+      // Check building collisions
+      for (const building of buildings) {
+        if (newPosition.x + player.radius > building.userData.minX &&
+            newPosition.x - player.radius < building.userData.maxX &&
+            newPosition.z + player.radius > building.userData.minZ &&
+            newPosition.z - player.radius < building.userData.maxZ) {
+          return true;
+        }
+      }
+      
+      // Keep player within bounds
+      const worldBounds = 50;
+      if (Math.abs(newPosition.x) > worldBounds || Math.abs(newPosition.z) > worldBounds) {
+        return true;
+      }
+      
+      return false;
+    }
+    
+    // Update function
+    function update() {
+      if (controlsEnabled) {
+        // Get forward direction
+        const forwardDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        forwardDirection.y = 0;
+        forwardDirection.normalize();
+        
+        // Get right direction
+        const rightDirection = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        rightDirection.y = 0;
+        rightDirection.normalize();
+        
+        // Reset movement direction
+        player.direction.set(0, 0, 0);
+        
+        // Update direction based on keys
+        if (keys.forward) player.direction.add(forwardDirection);
+        if (keys.backward) player.direction.sub(forwardDirection);
+        if (keys.right) player.direction.add(rightDirection);
+        if (keys.left) player.direction.sub(rightDirection);
+        
+        // Normalize direction if we're moving
+        if (player.direction.lengthSq() > 0) {
+          player.direction.normalize();
+        }
+        
+        // Apply horizontal movement
+        const moveX = player.direction.x * player.speed;
+        const moveZ = player.direction.z * player.speed;
+        
+        // Check horizontal collisions separately for X and Z to allow sliding along walls
+        let newPosition = new THREE.Vector3(
+          player.position.x + moveX,
+          player.position.y,
+          player.position.z
+        );
+        
+        if (!checkCollision(newPosition)) {
+          player.position.x = newPosition.x;
+        }
+        
+        newPosition = new THREE.Vector3(
+          player.position.x,
+          player.position.y,
+          player.position.z + moveZ
+        );
+        
+        if (!checkCollision(newPosition)) {
+          player.position.z = newPosition.z;
+        }
+        
+        // Apply gravity
+        player.velocity.y -= 0.01;
+        
+        // Apply jump if on ground
+        if (keys.jump && player.onGround) {
+          player.velocity.y = player.jumpStrength;
+          player.onGround = false;
+        }
+        
+        // Apply vertical movement
+        player.position.y += player.velocity.y;
+        
+        // Ground collision
+        if (player.position.y < player.height) {
+          player.position.y = player.height;
+          player.velocity.y = 0;
+          player.onGround = true;
+        }
+        
+        // Update camera position to follow player
+        camera.position.copy(player.position);
+      }
+    }
+    
+    // Handle window resize
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    
+    window.addEventListener('resize', onWindowResize, false);
+    
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      update();
+      renderer.render(scene, camera);
+    }
+    
+    animate();
+  </script>
+</body>
+</html>

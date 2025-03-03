@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Rustic 3D City Explorer</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        <h2>Rustic 3D City Explorer</h2>
+        <p>Controls:</p>
+        <ul>
+            <li>WASD or Arrow Keys: Move</li>
+            <li>Mouse: Look around</li>
+            <li>Space: Jump</li>
+            <li>R: Reset position</li>
+        </ul>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+        
+        // Camera setup
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const initialPosition = { x: 0, y: 2, z: 10 };
+        const initialRotation = { x: 0, y: 0 };
+        camera.position.set(initialPosition.x, initialPosition.y, initialPosition.z);
+        
+        // Renderer setup
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // Light setup
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(100, 100, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        directionalLight.shadow.camera.near = 10;
+        directionalLight.shadow.camera.far = 200;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        scene.add(directionalLight);
+        
+        // Materials
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x355E3B, // Forest green
+            roughness: 0.8, 
+            metalness: 0.2 
+        });
+        
+        const roadMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x696969, // Dark gray
+            roughness: 0.9, 
+            metalness: 0.1 
+        });
+        
+        const buildingMaterials = [
+            new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7, metalness: 0.1 }), // Brown
+            new THREE.MeshStandardMaterial({ color: 0x5F4A37, roughness: 0.7, metalness: 0.1 }), // Dark brown
+            new THREE.MeshStandardMaterial({ color: 0x8D6E63, roughness: 0.7, metalness: 0.1 }), // Light brown
+        ];
+        
+        const roofMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x8B0000, // Dark red
+            roughness: 0.6, 
+            metalness: 0.3 
+        });
+        
+        const treeTrunkMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x5D4037, 
+            roughness: 0.9, 
+            metalness: 0.1 
+        });
+        
+        const treeLeavesMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x1B5E20, 
+            roughness: 0.8, 
+            metalness: 0.1 
+        });
+        
+        const hillMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x2E7D32, 
+            roughness: 0.8, 
+            metalness: 0.1 
+        });
+        
+        // Create ground
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = 0;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        
+        // Create roads
+        const createRoad = (x, z, width, length, rotation = 0) => {
+            const roadGeometry = new THREE.PlaneGeometry(width, length);
+            const road = new THREE.Mesh(roadGeometry, roadMaterial);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(x, 0.01, z); // Slightly above ground to prevent z-fighting
+            road.rotation.z = rotation;
+            road.receiveShadow = true;
+            scene.add(road);
+        };
+        
+        // Create main roads
+        createRoad(0, 0, 10, 100, 0); // North-South main road
+        createRoad(0, 0, 100, 10, 0); // East-West main road
+        
+        // Buildings, trees, and hills arrays to track for collision detection
+        const buildings = [];
+        const trees = [];
+        const hills = [];
+        
+        // Function to create a building
+        const createBuilding = (x, z, width, depth, height) => {
+            const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+            const materialIndex = Math.floor(Math.random() * buildingMaterials.length);
+            const building = new THREE.Mesh(buildingGeometry, buildingMaterials[materialIndex]);
+            building.position.set(x, height / 2, z);
+            building.castShadow = true;
+            building.receiveShadow = true;
+            scene.add(building);
+            
+            // Add roof (simple pyramid)
+            const roofHeight = Math.min(width, depth) * 0.5;
+            const roofGeometry = new THREE.ConeGeometry(Math.max(width, depth) * 0.7, roofHeight, 4);
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.set(x, height + roofHeight / 2, z);
+            roof.rotation.y = Math.PI / 4;
+            roof.castShadow = true;
+            scene.add(roof);
+            
+            // Add to buildings array for collision detection
+            buildings.push({
+                position: { x, z },
+                width: width,
+                depth: depth,
+                boundingBox: new THREE.Box3().setFromObject(building)
+            });
+        };
+        
+        // Function to create a tree
+        const createTree = (x, z) => {
+            // Tree trunk
+            const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8);
+            const trunk = new THREE.Mesh(trunkGeometry, treeTrunkMaterial);
+            trunk.position.set(x, 0.75, z);
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            scene.add(trunk);
+            
+            // Tree leaves (multiple layers of cones)
+            for (let i = 0; i < 3; i++) {
+                const leavesGeometry = new THREE.ConeGeometry(1 - i * 0.2, 1.5, 8);
+                const leaves = new THREE.Mesh(leavesGeometry, treeLeavesMaterial);
+                leaves.position.set(x, 2 + i * 0.8, z);
+                leaves.castShadow = true;
+                scene.add(leaves);
+            }
+            
+            // Add to trees array for collision detection
+            trees.push({
+                position: { x, z },
+                radius: 0.5, // Simplified collision radius
+            });
+        };
+        
+        // Function to create a hill
+        const createHill = (x, z, radius, height) => {
+            const hillGeometry = new THREE.ConeGeometry(radius, height, 16, 1);
+            const hill = new THREE.Mesh(hillGeometry, hillMaterial);
+            hill.position.set(x, height / 2, z);
+            hill.castShadow = true;
+            hill.receiveShadow = true;
+            scene.add(hill);
+            
+            // Add to hills array for collision detection
+            hills.push({
+                position: { x, z },
+                radius: radius,
+                height: height,
+                mesh: hill
+            });
+        };
+        
+        // Create city layout
+        // Buildings
+        createBuilding(-20, -15, 8, 8, 8);
+        createBuilding(-20, 15, 6, 10, 5);
+        createBuilding(20, -15, 10, 7, 6);
+        createBuilding(20, 15, 9, 9, 7);
+        createBuilding(-40, 0, 8, 12, 5);
+        createBuilding(40, 0, 10, 8, 6);
+        createBuilding(0, -40, 12, 8, 7);
+        createBuilding(0, 40, 10, 10, 5);
+        createBuilding(-30, -30, 7, 7, 8);
+        createBuilding(30, 30, 9, 6, 6);
+        
+        // Trees
+        for (let i = 0; i < 50; i++) {
+            // Place trees away from roads
+            let x, z;
+            do {
+                x = (Math.random() - 0.5) * 180;
+                z = (Math.random() - 0.5) * 180;
+            } while (
+                (Math.abs(x) < 8 && Math.abs(z) < 45) || // Near N-S road
+                (Math.abs(z) < 8 && Math.abs(x) < 45)    // Near E-W road
+            );
+            
+            createTree(x, z);
+        }
+        
+        // Hills around the perimeter
+        const hillPositions = [
+            { x: -80, z: -80, radius: 20, height: 20 },
+            { x: 80, z: -80, radius: 25, height: 25 },
+            { x: 80, z: 80, radius: 22, height: 22 },
+            { x: -80, z: 80, radius: 18, height: 30 },
+            { x: -80, z: 0, radius: 15, height: 18 },
+            { x: 80, z: 0, radius: 20, height: 25 },
+            { x: 0, z: -80, radius: 18, height: 20 },
+            { x: 0, z: 80, radius: 15, height: 18 }
+        ];
+        
+        hillPositions.forEach(pos => {
+            createHill(pos.x, pos.z, pos.radius, pos.height);
+        });
+        
+        // Player physics
+        const player = {
+            height: 1.8,
+            radius: 0.5,
+            position: new THREE.Vector3(initialPosition.x, initialPosition.y, initialPosition.z),
+            velocity: new THREE.Vector3(0, 0, 0),
+            onGround: false,
+            speed: 0.15,
+            jumpStrength: 0.3,
+            gravity: 0.005,
+            rotation: { ...initialRotation }
+        };
+        
+        // Controls state
+        const keys = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            jump: false,
+            reset: false
+        };
+        
+        // Mouse control
+        let mouseEnabled = false;
+        let pitchObject = new THREE.Object3D();
+        let yawObject = new THREE.Object3D();
+        yawObject.add(pitchObject);
+        
+        document.addEventListener('click', () => {
+            if (!mouseEnabled) {
+                renderer.domElement.requestPointerLock();
+            }
+        });
+        
+        document.addEventListener('pointerlockchange', () => {
+            mouseEnabled = document.pointerLockElement === renderer.domElement;
+        });
+        
+        document.addEventListener('mousemove', (event) => {
+            if (!mouseEnabled) return;
+            
+            const movementX = event.movementX || 0;
+            const movementY = event.movementY || 0;
+            
+            // Rotate yaw (left/right)
+            yawObject.rotation.y -= movementX * 0.002;
+            
+            // Rotate pitch (up/down) with limits to prevent over-rotation
+            pitchObject.rotation.x -= movementY * 0.002;
+            pitchObject.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchObject.rotation.x));
+            
+            player.rotation.y = yawObject.rotation.y;
+        });
+        
+        // Keyboard controls
+        const keyDown = (event) => {
+            switch (event.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    keys.forward = true;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    keys.backward = true;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    keys.left = true;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    keys.right = true;
+                    break;
+                case 'Space':
+                    if (player.onGround) {
+                        keys.jump = true;
+                    }
+                    break;
+                case 'KeyR':
+                    keys.reset = true;
+                    break;
+            }
+        };
+        
+        const keyUp = (event) => {
+            switch (event.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    keys.forward = false;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    keys.backward = false;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    keys.left = false;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    keys.right = false;
+                    break;
+                case 'KeyR':
+                    keys.reset = false;
+                    break;
+            }
+        };
+        
+        document.addEventListener('keydown', keyDown);
+        document.addEventListener('keyup', keyUp);
+        
+        // Collision detection
+        const checkCollision = (newPosition) => {
+            // Check building collisions
+            for (const building of buildings) {
+                const dx = newPosition.x - building.position.x;
+                const dz = newPosition.z - building.position.z;
+                
+                if (Math.abs(dx) < (building.width / 2 + player.radius) && 
+                    Math.abs(dz) < (building.depth / 2 + player.radius)) {
+                    return true;
+                }
+            }
+            
+            // Check tree collisions
+            for (const tree of trees) {
+                const dx = newPosition.x - tree.position.x;
+                const dz = newPosition.z - tree.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < (tree.radius + player.radius)) {
+                    return true;
+                }
+            }
+            
+            // Check hill collisions
+            for (const hill of hills) {
+                const dx = newPosition.x - hill.position.x;
+                const dz = newPosition.z - hill.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < (hill.radius - player.radius) && 
+                    newPosition.y < hill.height * (1 - distance / hill.radius)) {
+                    return true;
+                }
+            }
+            
+            // Check world boundaries (keep within the ground plane)
+            if (Math.abs(newPosition.x) > 95 || Math.abs(newPosition.z) > 95) {
+                return true;
+            }
+            
+            return false;
+        };
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Animation loop
+        const animate = () => {
+            requestAnimationFrame(animate);
+            
+            // Reset position if requested
+            if (keys.reset) {
+                player.position.set(initialPosition.x, initialPosition.y, initialPosition.z);
+                player.velocity.set(0, 0, 0);
+                player.onGround = false;
+                yawObject.rotation.y = initialRotation.y;
+                pitchObject.rotation.x = initialRotation.x;
+                player.rotation.y = initialRotation.y;
+            }
+            
+            // Apply gravity
+            player.velocity.y -= player.gravity;
+            
+            // Check if player is on ground
+            if (player.position.y <= player.height / 2) {
+                player.onGround = true;
+                player.position.y = player.height / 2;
+                player.velocity.y = 0;
+            } else {
+                player.onGround = false;
+            }
+            
+            // Jump
+            if (keys.jump && player.onGround) {
+                player.velocity.y = player.jumpStrength;
+                keys.jump = false;
+            }
+            
+            // Movement direction
+            let moveX = 0;
+            let moveZ = 0;
+            
+            if (keys.forward) moveZ -= 1;
+            if (keys.backward) moveZ += 1;
+            if (keys.left) moveX -= 1;
+            if (keys.right) moveX += 1;
+            
+            // Normalize diagonal movement
+            if (moveX !== 0 && moveZ !== 0) {
+                moveX /= Math.sqrt(2);
+                moveZ /= Math.sqrt(2);
+            }
+            
+            // Compute movement based on camera direction
+            let direction = new THREE.Vector3(moveX, 0, moveZ);
+            direction.normalize();
+            
+            // Rotate movement direction based on camera rotation
+            direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y);
+            
+            // Calculate new position
+            const newPosition = new THREE.Vector3(
+                player.position.x + direction.x * player.speed,
+                player.position.y,
+                player.position.z + direction.z * player.speed
+            );
+            
+            // Apply position if no collision
+            if (!checkCollision(newPosition)) {
+                player.position.x = newPosition.x;
+                player.position.z = newPosition.z;
+            }
+            
+            // Apply vertical velocity
+            player.position.y += player.velocity.y;
+            
+            // Update camera position
+            camera.position.copy(player.position);
+            
+            // Update camera rotation
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = player.rotation.y;
+            camera.rotation.x = pitchObject.rotation.x;
+            
+            renderer.render(scene, camera);
+        };
+        
+        animate();
+    </script>
+</body>
+</html>

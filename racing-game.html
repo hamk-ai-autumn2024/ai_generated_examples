@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Racing Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #222;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            margin: 20px auto;
+            background-color: #333;
+        }
+        #hud {
+            color: white;
+            padding: 10px;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        #instructions {
+            color: white;
+            padding: 10px;
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            font-size: 18px;
+        }
+        #continue-btn {
+            margin-top: 15px;
+            padding: 8px 16px;
+            background-color: #3498db;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #continue-btn:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+        Current Time: 0.00s<br>
+        Best Time: --<br>
+        Coins: 0
+    </div>
+    <div id="instructions">
+        Controls: W/↑ to accelerate | S/↓ to brake/reverse | A/← D/→ to steer | R to reset
+    </div>
+    <div id="message-box">
+        <div id="message-text">Lap complete!</div>
+        <button id="continue-btn">Continue</button>
+    </div>
+
+    <script>
+        // Initialize canvas and context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size
+        canvas.width = 800;
+        canvas.height = 600;
+        
+        // Message box elements
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const continueBtn = document.getElementById('continue-btn');
+        
+        // Game state variables
+        let gameStarted = false;
+        let gameTime = 0;
+        let bestTime = localStorage.getItem('bestTime') ? parseFloat(localStorage.getItem('bestTime')) : null;
+        let coins = 0;
+        let lapCompleted = false;
+        let boostActive = false;
+        let boostTimeLeft = 0;
+        let brakeTime = 0;
+        let passedCheckpoint = false;
+        let crossedStartLine = false;
+        let gameActive = true;
+        
+        // Car properties
+        const car = {
+            x: 400,
+            y: 500,
+            width: 20,
+            height: 30,
+            speed: 0,
+            maxSpeed: 5,
+            acceleration: 0.1,
+            deceleration: 0.05,
+            brakeForce: 0.15,
+            rotation: -Math.PI / 2, // Point up
+            rotationSpeed: 0.04,
+            boostedMaxSpeed: 8,
+            reversing: false,
+            reverseMaxSpeed: 2.5
+        };
+        
+        // Track properties - complex circuit
+        const trackPath = [
+            {x: 300, y: 500, radius: 80, type: 'corner'},  // Bottom left corner
+            {x: 300, y: 150, radius: 80, type: 'corner'},  // Top left corner
+            {x: 500, y: 150, radius: 50, type: 'corner'},  // Top right corner
+            {x: 650, y: 300, radius: 70, type: 'corner'},  // Right middle corner
+            {x: 550, y: 450, radius: 60, type: 'corner'},  // Bottom right corner
+            {x: 300, y: 500, radius: 0, type: 'close'}     // Close the path
+        ];
+        
+        // Start line and checkpoint positions
+        const startLineX = 400;
+        const startLineY = 500;
+        const startLineWidth = 10;  // Vertical line width
+        const startLineHeight = 100; // Vertical line height
+        const checkpointX = 400;
+        const checkpointY = 150;
+        
+        // Track bounds
+        let trackBounds = [];
+        const trackWidth = 100;
+        
+        // Collectibles
+        let collectibles = [];
+        
+        // Control states
+        const keys = {
+            up: false,
+            down: false,
+            left: false,
+            right: false
+        };
+        
+        // Event listener for continue button
+        continueBtn.addEventListener('click', function() {
+            messageBox.style.display = 'none';
+            init();
+            gameActive = true;
+        });
+        
+        // Generate track boundaries based on the track path
+        function generateTrackBounds() {
+            trackBounds = [];
+            
+            // Generate a more detailed track based on the path
+            let innerPoints = [];
+            let outerPoints = [];
+            
+            // For each segment
+            for (let i = 0; i < trackPath.length - 1; i++) {
+                const current = trackPath[i];
+                const next = trackPath[i + 1];
+                
+                if (current.type === 'corner' && next.type !== 'close') {
+                    // Calculate direction vector
+                    const dx = next.x - current.x;
+                    const dy = next.y - current.y;
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    const nx = dx / length;
+                    const ny = dy / length;
+                    
+                    // Calculate perpendicular vector
+                    const px = -ny;
+                    const py = nx;
+                    
+                    // Generate points for the outer and inner edges
+                    const segments = 10;
+                    for (let j = 0; j < segments; j++) {
+                        const t = j / segments;
+                        const pointX = current.x + dx * t;
+                        const pointY = current.y + dy * t;
+                        
+                        innerPoints.push({
+                            x: pointX + px * (trackWidth / 2),
+                            y: pointY + py * (trackWidth / 2)
+                        });
+                        
+                        outerPoints.push({
+                            x: pointX - px * (trackWidth / 2),
+                            y: pointY - py * (trackWidth / 2)
+                        });
+                    }
+                }
+            }
+            
+            // Combine inner and outer points for the track bounds
+            trackBounds = {
+                inner: innerPoints,
+                outer: outerPoints
+            };
+        }
+        
+        // Display message box
+        function showMessage(text) {
+            messageText.textContent = text;
+            messageBox.style.display = 'block';
+            gameActive = false;
+        }
+        
+        // Initialize game
+        function init() {
+            // Generate track bounds
+            generateTrackBounds();
+            
+            // Reset car position
+            car.x = startLineX;
+            car.y = startLineY;
+            car.speed = 0;
+            car.rotation = -Math.PI / 2;
+            car.reversing = false;
+            
+            // Reset game state
+            gameStarted = false;
+            gameTime = 0;
+            coins = 0;
+            lapCompleted = false;
+            boostActive = false;
+            boostTimeLeft = 0;
+            brakeTime = 0;
+            passedCheckpoint = false;
+            crossedStartLine = false;
+            
+            // Generate collectibles
+            generateCollectibles();
+            
+            // Update HUD
+            updateHUD();
+            
+            // Start game loop
+            if (!gameLoopRunning) {
+                gameLoopRunning = true;
+                gameLoop();
+            }
+        }
+        
+        // Generate coins and speed boosts around the track
+        function generateCollectibles() {
+            collectibles = [];
+            
+            // Define positions along the track for better placement
+            const collectiblePositions = [
+                {x: 300, y: 350}, // Left side
+                {x: 300, y: 250}, // Left side
+                {x: 350, y: 150}, // Top left
+                {x: 450, y: 150}, // Top right
+                {x: 550, y: 200}, // Right side
+                {x: 650, y: 300}, // Far right
+                {x: 600, y: 400}, // Bottom right
+                {x: 500, y: 450}, // Bottom
+                {x: 400, y: 450}, // Bottom
+                {x: 350, y: 500}  // Bottom left
+            ];
+            
+            // Generate 8 coins
+            for (let i = 0; i < 8; i++) {
+                const pos = collectiblePositions[i];
+                collectibles.push({
+                    x: pos.x,
+                    y: pos.y,
+                    type: 'coin',
+                    radius: 8,
+                    collected: false
+                });
+            }
+            
+            // Generate 3 speed boosts at specific positions
+            collectibles.push({
+                x: collectiblePositions[8].x,
+                y: collectiblePositions[8].y,
+                type: 'boost',
+                radius: 12,
+                collected: false
+            });
+            
+            collectibles.push({
+                x: collectiblePositions[9].x,
+                y: collectiblePositions[9].y,
+                type: 'boost',
+                radius: 12,
+                collected: false
+            });
+            
+            collectibles.push({
+                x: 500,
+                y: 250,
+                type: 'boost',
+                radius: 12,
+                collected: false
+            });
+        }
+        
+        // Update HUD information
+        function updateHUD() {
+            const hudElement = document.getElementById('hud');
+            hudElement.innerHTML = `
+                Current Time: ${gameStarted ? gameTime.toFixed(2) : '0.00'}s<br>
+                Best Time: ${bestTime ? bestTime.toFixed(2) + 's' : '--'}<br>
+                Coins: ${coins}
+            `;
+        }
+        
+        // Input handling
+        window.addEventListener('keydown', (e) => {
+            if (!gameActive) return;
+            
+            switch(e.key) {
+                case 'w':
+                case 'W':
+                case 'ArrowUp':
+                    keys.up = true;
+                    break;
+                case 's':
+                case 'S':
+                case 'ArrowDown':
+                    keys.down = true;
+                    break;
+                case 'a':
+                case 'A':
+                case 'ArrowLeft':
+                    keys.left = true;
+                    break;
+                case 'd':
+                case 'D':
+                case 'ArrowRight':
+                    keys.right = true;
+                    break;
+                case 'r':
+                case 'R':
+                    init();
+                    gameActive = true;
+                    break;
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            switch(e.key) {
+                case 'w':
+                case 'W':
+                case 'ArrowUp':
+                    keys.up = false;
+                    break;
+                case 's':
+                case 'S':
+                case 'ArrowDown':
+                    keys.down = false;
+                    brakeTime = 0; // Reset brake time when releasing brake
+                    break;
+                case 'a':
+                case 'A':
+                case 'ArrowLeft':
+                    keys.left = false;
+                    break;
+                case 'd':
+                case 'D':
+                case 'ArrowRight':
+                    keys.right = false;
+                    break;
+            }
+        });
+        
+        // Check if the car is on the track (simplified for now)
+        function isOnTrack(x, y) {
+            // For now, simple boundary check
+            return x > 50 && x < canvas.width - 50 && y > 50 && y < canvas.height - 50;
+        }
+        
+        // Check if car crosses the checkpoint
+        function checkCheckpoint() {
+            const distanceToCheckpoint = Math.sqrt(
+                Math.pow(car.x - checkpointX, 2) + 
+                Math.pow(car.y - checkpointY, 2)
+            );
+            
+            if (distanceToCheckpoint < 50 && !passedCheckpoint && crossedStartLine) {
+                passedCheckpoint = true;
+            }
+        }
+        
+        // Check if car crosses finish line and completes a lap
+        function checkLapCompletion() {
+            // Calculate distance to start line
+            const distanceX = Math.abs(car.x - startLineX);
+            const distanceY = Math.abs(car.y - startLineY);
+            
+            // Crossing start/finish line logic
+            if (distanceX < startLineWidth/2 && distanceY < startLineHeight/2) {
+                // Car is on the start/finish line
+                if (!crossedStartLine) {
+                    // First time crossing start line
+                    crossedStartLine = true;
+                    gameStarted = true;
+                } else if (passedCheckpoint && !lapCompleted) {
+                    // Completed a full lap (crossed start, then checkpoint, then back to start)
+                    lapCompleted = true;
+                    
+                    // Check if this is a new best time
+                    if (!bestTime || gameTime < bestTime) {
+                        bestTime = gameTime;
+                        localStorage.setItem('bestTime', bestTime);
+                    }
+                    
+                    // Show lap completion message
+                    showMessage(`Lap completed in ${gameTime.toFixed(2)} seconds!\nCoins collected: ${coins}`);
+                }
+            }
+        }
+        
+        // Check collisions with collectibles
+        function checkCollectibles() {
+            collectibles.forEach(item => {
+                if (!item.collected) {
+                    const dx = car.x - item.x;
+                    const dy = car.y - item.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < car.width / 2 + item.radius) {
+                        item.collected = true;
+                        
+                        if (item.type === 'coin') {
+                            coins++;
+                        } else if (item.type === 'boost') {
+                            activateBoost();
+                        }
+                        
+                        updateHUD();
+                    }
+                }
+            });
+        }
+        
+        // Activate speed boost
+        function activateBoost() {
+            boostActive = true;
+            boostTimeLeft = 2; // 2 seconds boost
+        }
+        
+        // Update game state
+        function update(deltaTime) {
+            if (!gameActive) return;
+            
+            // Handle car rotation based on steering
+            if (keys.left) {
+                // Scale rotation by speed
+                const speedFactor = Math.max(0.2, Math.abs(car.speed) / car.maxSpeed);
+                car.rotation -= car.rotationSpeed * speedFactor;
+            }
+            if (keys.right) {
+                const speedFactor = Math.max(0.2, Math.abs(car.speed) / car.maxSpeed);
+                car.rotation += car.rotationSpeed * speedFactor;
+            }
+            
+            // Handle acceleration/deceleration with the fixed controls
+            if (keys.up) { // Accelerate
+                if (car.reversing) {
+                    // If currently reversing, first slow down to 0
+                    car.speed += car.brakeForce;
+                    if (car.speed >= 0) {
+                        car.speed = 0;
+                        car.reversing = false;
+                    }
+                } else {
+                    car.speed += car.acceleration;
+                }
+            } else if (keys.down) { // Brake or reverse
+                if (car.speed > 0) {
+                    // If moving forward, apply brakes
+                    car.speed -= car.brakeForce;
+                    if (car.speed < 0) {
+                        car.speed = 0;
+                    }
+                } else if (car.speed === 0) {
+                    // If already stopped, count brake time to start reversing
+                    brakeTime += deltaTime;
+                    if (brakeTime >= 0.5) {
+                        car.reversing = true;
+                        car.speed -= car.acceleration / 2; // Start reversing slowly
+                    }
+                } else {
+                    // Already reversing, continue
+                    car.speed -= car.acceleration / 2; // Slower acceleration in reverse
+                }
+            } else {
+                // No key pressed, gradually slow down
+                if (car.speed > 0) {
+                    car.speed -= car.deceleration;
+                    if (car.speed < 0) car.speed = 0;
+                } else if (car.speed < 0) {
+                    car.speed += car.deceleration;
+                    if (car.speed > 0) car.speed = 0;
+                }
+                
+                // Reset reversing flag if stopped
+                if (car.speed === 0) {
+                    car.reversing = false;
+                }
+            }
+            
+            // Apply boost effect
+            if (boostActive) {
+                boostTimeLeft -= deltaTime;
+                if (boostTimeLeft <= 0) {
+                    boostActive = false;
+                }
+            }
+            
+            // Limit speed
+            const currentMaxSpeed = boostActive ? car.boostedMaxSpeed : car.maxSpeed;
+            if (car.speed > currentMaxSpeed) {
+                car.speed = currentMaxSpeed;
+            } else if (car.speed < -car.reverseMaxSpeed) { // Limit reverse speed
+                car.speed = -car.reverseMaxSpeed;
+            }
+            
+            // Calculate new position
+            const newX = car.x + Math.cos(car.rotation) * car.speed;
+            const newY = car.y + Math.sin(car.rotation) * car.speed;
+            
+            // Check if the new position is on the track
+            if (isOnTrack(newX, newY)) {
+                car.x = newX;
+                car.y = newY;
+            } else {
+                // Hit wall, reduce speed
+                car.speed *= -0.5;
+            }
+            
+            // Check checkpoint and lap completion
+            checkCheckpoint();
+            checkLapCompletion();
+            
+            // Check collectibles
+            checkCollectibles();
+            
+            // Update game time if the game has started
+            if (gameStarted && !lapCompleted) {
+                gameTime += deltaTime;
+                updateHUD();
+            }
+        }
+        
+        // Draw the game
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw track background
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw track
+            ctx.fillStyle = '#7f8c8d';
+            ctx.beginPath();
+            ctx.moveTo(200, 500);
+            
+            // Draw main track shape
+            ctx.lineTo(200, 150);
+            ctx.lineTo(550, 150);
+            ctx.lineTo(700, 300);
+            ctx.lineTo(600, 500);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Draw track inner cutout
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.moveTo(300, 450);
+            ctx.lineTo(300, 200);
+            ctx.lineTo(500, 200);
+            ctx.lineTo(600, 300);
+            ctx.lineTo(550, 450);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Draw start/finish line (VERTICAL)
+            ctx.save();
+            // Draw finish line - vertical line
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(startLineX - startLineWidth/2, startLineY - startLineHeight/2, startLineWidth, startLineHeight);
+            
+            // Add checkerboard pattern
+            const squareSize = 5;
+            const numSquares = startLineHeight / squareSize;
+            
+            for (let i = 0; i < numSquares; i++) {
+                if (i % 2 === 0) continue;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(
+                    startLineX - startLineWidth/2, 
+                    startLineY - startLineHeight/2 + i * squareSize, 
+                    startLineWidth/2, 
+                    squareSize
+                );
+                ctx.fillRect(
+                    startLineX, 
+                    startLineY - startLineHeight/2 + (i+1) * squareSize, 
+                    startLineWidth/2, 
+                    squareSize
+                );
+            }
+            ctx.restore();
+            
+            // Draw checkpoint (invisible in game but visible during development)
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+            ctx.beginPath();
+            ctx.arc(checkpointX, checkpointY, 10, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw lane markings
+            ctx.strokeStyle = '#fff';
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(250, 475);
+            ctx.lineTo(250, 175);
+            ctx.lineTo(525, 175);
+            ctx.lineTo(650, 300);
+            ctx.lineTo(575, 475);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw collectibles
+            collectibles.forEach(item => {
+                if (!item.collected) {
+                    if (item.type === 'coin') {
+                        // Draw coin
+                        ctx.fillStyle = '#FFD700'; // Gold
+                        ctx.beginPath();
+                        ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Add coin detail
+                        ctx.strokeStyle = '#DAA520';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(item.x, item.y, item.radius - 2, 0, Math.PI * 2);
+                        ctx.stroke();
+                        
+                        // Add $ symbol
+                        ctx.fillStyle = '#DAA520';
+                        ctx.font = '10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('$', item.x, item.y);
+                    } else {
+                        // Draw boost
+                        ctx.fillStyle = '#FF3333'; // Red for boost
+                        ctx.beginPath();
+                        ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Add lightning bolt symbol
+                        ctx.fillStyle = '#FFF';
+                        ctx.beginPath();
+                        ctx.moveTo(item.x - 2, item.y - 5);
+                        ctx.lineTo(item.x + 3, item.y - 1);
+                        ctx.lineTo(item.x - 1, item.y + 1);
+                        ctx.lineTo(item.x + 4, item.y + 5);
+                        ctx.lineTo(item.x + 1, item.y);
+                        ctx.lineTo(item.x + 5, item.y - 3);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                }
+            });
+            
+            // Draw car
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.rotation);
+            
+            // Car body - more detailed and obvious front
+            const carWidth = car.width * 1.2;
+            const carHeight = car.height * 1.1;
+            
+            // Car body
+            ctx.fillStyle = boostActive ? '#FF6347' : '#3498db';
+            ctx.beginPath();
+            ctx.moveTo(-carWidth/2, -carHeight/2); // Top left
+            ctx.lineTo(carWidth/2, -carHeight/2);  // Top right
+            ctx.lineTo(carWidth/2, carHeight/2);   // Bottom right
+            ctx.lineTo(-carWidth/2, carHeight/2);  // Bottom left
+            ctx.closePath();
+            ctx.fill();
+            
+            // Car windshield and details
+            ctx.fillStyle = '#222';
+            ctx.fillRect(-carWidth/3, -carHeight/2, carWidth*2/3, carHeight/3);
+            
+            // Wheels
+            ctx.fillStyle = '#333';
+            ctx.fillRect(-carWidth/2 - 2, -carHeight/2 + 3, 6, 8); // Front left
+            ctx.fillRect(carWidth/2 - 4, -carHeight/2 + 3, 6, 8);  // Front right
+            ctx.fillRect(-carWidth/2 - 2, carHeight/2 - 11, 6, 8); // Rear left
+            ctx.fillRect(carWidth/2 - 4, carHeight/2 - 11, 6, 8);  // Rear right
+            
+            // Front arrow indicator
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath();
+            ctx.moveTo(0, -carHeight/2 - 5); // Tip of arrow
+            ctx.lineTo(-5, -carHeight/2 + 3); // Left side of arrow
+            ctx.lineTo(5, -carHeight/2 + 3);  // Right side of arrow
+            ctx.closePath();
+            ctx.fill();
+            
+            // Headlights
+            ctx.fillStyle = '#FFFF00';
+            ctx.fillRect(-carWidth/4 - 4, -carHeight/2 - 2, 4, 4);
+            ctx.fillRect(carWidth/4, -carHeight/2 - 2, 4, 4);
+            
+            ctx.restore();
+            
+            // Draw boost indicator if active
+            if (boostActive) {
+                ctx.fillStyle = 'rgba(255, 99, 71, 0.7)';
+                ctx.fillRect(10, 70, (boostTimeLeft / 2) * 100, 10);
+                ctx.strokeStyle = '#fff';
+                ctx.strokeRect(10, 70, 100, 10);
+                ctx.fillStyle = '#fff';
+                ctx.font = '10px Arial';
+                ctx.fillText('BOOST', 45, 77);
+            }
+            
+            // Draw reverse indicator if reversing
+            if (car.reversing) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.font = '12px Arial';
+                ctx.fillText('REVERSING', 15, 95);
+            }
+            
+            // Draw checkpoint status
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '12px Arial';
+            if (passedCheckpoint && crossedStartLine) {
+                ctx.fillText('CHECKPOINT: PASSED', 15, 115);
+            } else if (crossedStartLine) {
+                ctx.fillText('CHECKPOINT: NOT PASSED', 15, 115);
+            }
+        }
+        
+        // Game loop
+        let lastTime = 0;
+        let gameLoopRunning = false;
+        
+        function gameLoop(timestamp = 0) {
+            const deltaTime = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            
+            update(deltaTime);
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start the game
+        init();
+    </script>
+</body>
+</html>

@@ -16,7 +16,7 @@ use Tkinter for GUI
 generate home page for gym, include title "Riihimäki Genius Gym", slogan, some text about gym facilities and opening hours and placeholder for image.
 
 # Candy Crush Saga-alike game (candy_crush_clone.html) gpt-o3-mini
-Generate Candy Crush clone in JS using HTML5 canvas. Aim for nice looking colorful graphics and use animations to show when connect-3 happens. Make sure this connect-3 game show the points and there is a way to restart the game. In the beginng of the game check 3-matches. Show score on screen. Do NOT use alert or prompt. Embed all JavaScript into one HTML5 file and make it mobile friendly as well.
+Generate Candy Crush clone in JS using HTML5 canvas. Aim for nice looking colorful graphics and use animations to show when connect-3 happens. Make sure this connect-3 game show the points and there is a way to restart the game. In the beginning of the game check all the 3-matches. Show score on screen. Do NOT use alert or prompt. Embed all JavaScript into one HTML5 file and make it mobile friendly as well. Simple swipe and click the matching elements should both work.
 
 # Platform game (platform_game.html) - Claude 3.5 Sonnet
 Generate using a platform jumping game in JavaScript, using HTML5 canvas. The game should have:
@@ -34,12 +34,13 @@ generate a kawaii calculator using HTML5 and JS
 generate a kawaii calculator using HTML5 and JS
 
 # Painting program (paint.html) Claude 3.5 Sonnet
-Generate painting program similar to Microsoft Paint using JavaScript and HTML5 Canvas. The painting program should have at least the following features:
-- draw with mouse
+Generate a painting app similar to Microsoft Paint using JavaScript and HTML5 Canvas. The painting app should have at least the following features:
+- draw with mouse (hold mouse down)
 - eraser tool with mouse (draw with background color)
 - adjust the line width
 - fill closed area starting from the point clicked
-- change the drawing color and fill color
+- change the drawing color (triggering color selector)
+- change the fill color
 - draw filled rectangles by dragging the mouse from left upper corner
 - empty the canvas
 Make sure you handle drag events correctly, so they don't trigger browser default actions.
@@ -96,5 +97,52 @@ The app should have following features:
 
 The app should be robust and display appropriate error messages in case user gives wrong input. Do NOT use alert or prompt, but use HTML5 forms instead.
 
+# 3D City (3d_city.html) Claude 3.7 Sonnet
+Generate a rustic nice-looking green 3D city where you can move using WASD and arrow keys and jump with space button. Use mouse to control the camera like in most FPS games. Try to include basic collision detection. Pressing R should reset the player to the original position and direction.
 
+Generate all the code in one HTML5 file, using JavaScript. If you use external libraries, link them via CDN.
 
+Now all the houses look similar and there are no roads or elevation. The house roof is floating above the building. Fix these issues. 
+1. Roof should be connected the house. House should be connected to the ground.
+2. Add roads.
+3. Add some hills around the city, potentially blocking player.
+
+# racing Claude 3.7 Sonnet
+Generate a top-down view 2D racing game. The car can be controlled using WASD and arrow keys. A/left arrow to turn left and D/right arrow to turn right. W/up arrow should emulate the gas pedal of the car, increasing acceleration until top speed is reached. S/down arrow to should simulate the break pedal of the car. Pressing it should deaccelerate and stop the car. Pressing break longer time e.g. 0.5 seconds while stopped should allow the car to be moved backwards.
+
+The game should begin at the middle of the finish line. The finishing/start line should be perpendicular to the track. The game is measuring how fast the player completed the lap and shows both the all-time best. In order to finish a lap the car must pass through several check points and go over the finish line. The track should be interesting and not a circle. 
+
+The track has 2 kinds of objects to collect:
+- coins (and HUD is showing how many coins collected)
+- speed boosts (give a 2 second speed boost)
+
+Driving over an item will pick it. Finish a lap should reset all the collective items. Pressing R button will reset the game.
+
+The car should appear in such way that is obvious that which way is front e.g. arrow in the hood of the car pointing towards the direction it moves.
+
+Generate all the code in one HTML5 file, using JavaScript. If you use external libraries, link them via CDN. Do NOT use alert or prompt.
+
+# space shooter Claude 3.7 Sonnet
+Generate 2D space shooter game. Make it look cool and retro. The player is controlling a space ship against waves of enemies, which slowly come at it in large numbers.
+
+The ship is controlled as follows:
+left arrow/A = move left
+right arrow/D = move right
+space = shoot
+The space ship is limited to stay within the lower part of the screen and cannot go off screen.
+
+Each time the user presses space it shoots a missile, which a bright vertical bar moving up fast. If the missile hits an enemy, the enemy and missile are destroyed. There is 20% of change the enemy drops an item, which slowly sinks down.
+
+Pick up items:
+- Heart shape (H), gives 3 health
+- Speed boost (S), gives 50% movement speed for 10 seconds.
+
+If enemy manages to hit the player ship, the ship takes 1 hit point damage. The ship originally has 10 hit points.
+
+Finally there is a large boss enemy, which has 50 hit points. It requires 50 hits.
+
+If the player hit points drop to zero, "Game Over" is displayed on screen. If the player defeats the boss, "You win" is displayer on screen. 
+
+Pressing R restarts the game.
+
+Generate all the code in one HTML5 file, using JavaScript. If you use external libraries, link them via CDN. Do NOT use alert or prompt.
