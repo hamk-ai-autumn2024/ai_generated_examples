@@ -146,3 +146,6 @@ If the player hit points drop to zero, "Game Over" is displayed on screen. If th
 Pressing R restarts the game.
 
 Generate all the code in one HTML5 file, using JavaScript. If you use external libraries, link them via CDN. Do NOT use alert or prompt.
+
+# speech_synthesizer.html
+Make a speech synthesizer using HTML5 and JavaScript. The responsive and mobile friendly web page should have an input text area and select-option selector for the voices (at minimum English, Spanish, Chinese and more), speech speed and speech frequency setting. Pressing the "Speak" button will utter the input text using Web Speech API.

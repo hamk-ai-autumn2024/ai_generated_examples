@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech Synthesizer</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #f8f9fa;
+            --text-color: #333;
+            --padding: 15px;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--secondary-color);
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: var(--primary-color);
+        }
+        
+        main {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: var(--padding);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 1rem;
+            resize: vertical;
+        }
+        
+        select, input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            margin-bottom: 10px;
+        }
+        
+        .range-value {
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: var(--padding) 30px;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            display: block;
+            margin: 20px auto;
+        }
+        
+        button:hover {
+            background-color: #357abD;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        /* Responsive styles */
+        @media (max-width: 600px) {
+            main {
+                padding: 15px;
+            }
+            
+            textarea {
+                height: 120px;
+            }
+            
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Speech Synthesizer</h1>
+        <p>Enter text and adjust settings to hear it spoken</p>
+    </header>
+    
+    <main>
+        <section class="control-group">
+            <label for="text-input">Enter Text:</label>
+            <textarea id="text-input" placeholder="Type or paste text here..."></textarea>
+        </section>
+        
+        <section class="control-group">
+            <label for="voice-select">Select Voice:</label>
+            <select id="voice-select">
+                <option value="">Loading voices...</option>
+            </select>
+        </section>
+        
+        <section class="control-group">
+            <label for="rate">Speech Rate: <span id="rate-value">1</span></label>
+            <input type="range" id="rate" min="0.5" max="2" value="1" step="0.1">
+        </section>
+        
+        <section class="control-group">
+            <label for="pitch">Pitch: <span id="pitch-value">1</span></label>
+            <input type="range" id="pitch" min="0.5" max="2" value="1" step="0.1">
+        </section>
+        
+        <button id="speak-btn">Speak</button>
+    </main>
+    
+    <footer>
+        <p>Using HTML5 Web Speech API</p>
+    </footer>
+
+    <script>
+        // Global variables
+        const synth = window.speechSynthesis;
+        let voices = [];
+        
+        // DOM elements
+        const textInput = document.getElementById('text-input');
+        const voiceSelect = document.getElementById('voice-select');
+        const rateInput = document.getElementById('rate');
+        const rateValue = document.getElementById('rate-value');
+        const pitchInput = document.getElementById('pitch');
+        const pitchValue = document.getElementById('pitch-value');
+        const speakBtn = document.getElementById('speak-btn');
+        
+        // Initialize speech synthesis
+        function init() {
+            // Check for browser support
+            if (!synth) {
+                alert('Sorry, your browser does not support speech synthesis. Please try using Chrome or Edge.');
+                speakBtn.disabled = true;
+                return;
+            }
+            
+            // Load voices
+            loadVoices();
+            
+            // Some browsers (like Chrome) load voices asynchronously
+            if (synth.onvoiceschanged !== undefined) {
+                synth.onvoiceschanged = loadVoices;
+            }
+            
+            // Set up event listeners
+            rateInput.addEventListener('input', () => {
+                rateValue.textContent = rateInput.value;
+            });
+            
+            pitchInput.addEventListener('input', () => {
+                pitchValue.textContent = pitchInput.value;
+            });
+            
+            speakBtn.addEventListener('click', speak);
+        }
+        
+        // Load available voices and populate select dropdown
+        function loadVoices() {
+            voices = synth.getVoices();
+            
+            // Clear previous options
+            voiceSelect.innerHTML = '';
+            
+            // Group by language
+            const voicesByLang = {};
+            voices.forEach(voice => {
+                const lang = voice.lang.split('-')[0];
+                if (!voicesByLang[lang]) {
+                    voicesByLang[lang] = [];
+                }
+                voicesByLang[lang].push(voice);
+            });
+            
+            // Add option groups by language
+            const priorityLangs = ['en', 'es', 'zh']; // English, Spanish, Chinese
+            
+            // First add priority languages
+            priorityLangs.forEach(lang => {
+                if (voicesByLang[lang]) {
+                    const optgroup = document.createElement('optgroup');
+                    const langNames = {
+                        'en': 'English',
+                        'es': 'Spanish',
+                        'zh': 'Chinese'
+                    };
+                    optgroup.label = langNames[lang] || lang;
+                    
+                    voicesByLang[lang].forEach(voice => {
+                        const option = document.createElement('option');
+                        option.textContent = `${voice.name} (${voice.lang})`;
+                        option.value = voice.name;
+                        optgroup.appendChild(option);
+                    });
+                    
+                    voiceSelect.appendChild(optgroup);
+                    delete voicesByLang[lang]; // Remove from object to avoid duplication
+                }
+            });
+            
+            // Add remaining languages
+            Object.keys(voicesByLang).sort().forEach(lang => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = lang;
+                
+                voicesByLang[lang].forEach(voice => {
+                    const option = document.createElement('option');
+                    option.textContent = `${voice.name} (${voice.lang})`;
+                    option.value = voice.name;
+                    optgroup.appendChild(option);
+                });
+                
+                voiceSelect.appendChild(optgroup);
+            });
+            
+            // Select the first voice as default
+            if (voices.length > 0) {
+                voiceSelect.value = voices[0].name;
+            }
+        }
+        
+        // Speak the text
+        function speak() {
+            // Cancel any ongoing speech
+            synth.cancel();
+            
+            // Get input values
+            const text = textInput.value.trim();
+            if (!text) {
+                alert('Please enter some text to speak.');
+                textInput.focus();
+                return;
+            }
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Set selected voice
+            const selectedVoice = voices.find(voice => voice.name === voiceSelect.value);
+            if (selectedVoice) {
+                utterance.voice = selectedVoice;
+            }
+            
+            // Set rate and pitch
+            utterance.rate = parseFloat(rateInput.value);
+            utterance.pitch = parseFloat(pitchInput.value);
+            
+            // Handle errors and completion
+            utterance.onerror = (event) => {
+                console.error('Speech synthesis error:', event);
+                alert('An error occurred while speaking the text. Please try again.');
+            };
+            
+            // Speak
+            synth.speak(utterance);
+            
+            // Disable button during speech
+            speakBtn.disabled = true;
+            speakBtn.textContent = 'Speaking...';
+            
+            utterance.onend = () => {
+                speakBtn.disabled = false;
+                speakBtn.textContent = 'Speak';
+            };
+        }
+        
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
