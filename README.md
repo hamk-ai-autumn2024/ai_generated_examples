@@ -149,3 +149,40 @@ Generate all the code in one HTML5 file, using JavaScript. If you use external l
 
 # speech_synthesizer.html
 Make a speech synthesizer using HTML5 and JavaScript. The responsive and mobile friendly web page should have an input text area and select-option selector for the voices (at minimum English, Spanish, Chinese and more), speech speed and speech frequency setting. Pressing the "Speak" button will utter the input text using Web Speech API.
+
+# warehouse_db.py
+Generate a warehouse app using Python and sqlite3 and text based user interface. Separate the logic and user interface completely.
+
+Each warehouse item has the following attributes:
+- name (str) = name of the item
+- price (int) in cents = price in cents, but rendered as euros (€) in user interface
+- amount (int) = how items are currently in the warehouse of the given name
+
+The warehouse app must have the following functionality:
+
+1. Add a new product:
+prompt user for name (str), price (float) in euros, amount (int)
+automatically convert the price from euros into cents (for internal DB storage)
+
+2. Modify existing product:
+- Search product based on name
+- If not product of the supplied name was found, tell user there is no product of such name.
+- If product was found, prompt user for new price and amount. Otherwise act as "add a new product".
+- confirm user yes/no to actually modify or not
+
+3. Delete existing product.
+- Search product based on name
+- If not product of the supplied name was found, tell user there is no product of such name.
+- If product was found, remove it.
+- confirm user yes/no to delete
+
+4. List products in ascending alphabetical order.
+
+5. List products in ascending price order.
+
+6. Find product based on partial name. Should be case intensitive.
+- e.g. If user searches "saw", he should also find "CHAINSAW".
+
+7. Exit and save results to database.
+
+Include comprehensive error checking. Create indexes for the most widely used listing and search operations (ordered by name and ordered by price).
