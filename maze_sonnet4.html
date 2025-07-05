@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Generator</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #059669;
+            --danger-color: #dc2626;
+            --background-color: #f8fafc;
+            --card-background: #ffffff;
+            --border-color: #e2e8f0;
+            --text-color: #1e293b;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        header {
+            background: var(--card-background);
+            padding: 1rem 0;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        .controls {
+            background: var(--card-background);
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        .control-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--secondary-color);
+        }
+
+        input[type="range"], input[type="number"] {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        input[type="range"] {
+            height: 2.5rem;
+        }
+
+        .value-display {
+            margin-top: 0.25rem;
+            font-size: 0.875rem;
+            color: var(--secondary-color);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #047857;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #b91c1c;
+        }
+
+        .canvas-container {
+            background: var(--card-background);
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        canvas {
+            border: 2px solid var(--border-color);
+            border-radius: 4px;
+            max-width: 100%;
+            height: auto;
+        }
+
+        @media (max-width: 768px) {
+            .control-group {
+                grid-template-columns: 1fr;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+            }
+            
+            .canvas-container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Maze Generator</h1>
+    </header>
+
+    <main>
+        <section class="controls">
+            <div class="control-group">
+                <div class="form-group">
+                    <label for="mazeWidth">Width: <span id="widthValue">21</span></label>
+                    <input type="range" id="mazeWidth" min="11" max="51" step="2" value="21">
+                </div>
+                <div class="form-group">
+                    <label for="mazeHeight">Height: <span id="heightValue">21</span></label>
+                    <input type="range" id="mazeHeight" min="11" max="51" step="2" value="21">
+                </div>
+                <div class="form-group">
+                    <label for="cellSize">Cell Size: <span id="sizeValue">20</span>px</label>
+                    <input type="range" id="cellSize" min="10" max="40" value="20">
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button id="generateBtn" class="btn-primary">Generate New Maze</button>
+                <button id="solutionBtn" class="btn-success">Show Solution</button>
+                <button id="clearBtn" class="btn-danger">Clear Solution</button>
+            </div>
+        </section>
+
+        <section class="canvas-container">
+            <canvas id="mazeCanvas"></canvas>
+        </section>
+    </main>
+
+    <script>
+        class MazeGenerator {
+            constructor(width, height) {
+                this.width = width;
+                this.height = height;
+                this.maze = [];
+                this.solution = [];
+                this.WALL = 1;
+                this.PATH = 0;
+                this.SOLUTION = 2;
+            }
+
+            generate() {
+                try {
+                    this.initializeMaze();
+                    this.generateMaze();
+                    this.findSolution();
+                } catch (error) {
+                    console.error('Error generating maze:', error);
+                    throw new Error('Failed to generate maze');
+                }
+            }
+
+            initializeMaze() {
+                this.maze = Array(this.height).fill().map(() => Array(this.width).fill(this.WALL));
+            }
+
+            generateMaze() {
+                const stack = [];
+                const startX = 1;
+                const startY = 1;
+                
+                this.maze[startY][startX] = this.PATH;
+                stack.push([startX, startY]);
+
+                const directions = [[0, 2], [2, 0], [0, -2], [-2, 0]];
+
+                while (stack.length > 0) {
+                    const [currentX, currentY] = stack[stack.length - 1];
+                    const neighbors = this.getUnvisitedNeighbors(currentX, currentY, directions);
+
+                    if (neighbors.length > 0) {
+                        const [nextX, nextY] = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        
+                        // Remove wall between current and next cell
+                        const wallX = currentX + (nextX - currentX) / 2;
+                        const wallY = currentY + (nextY - currentY) / 2;
+                        
+                        this.maze[wallY][wallX] = this.PATH;
+                        this.maze[nextY][nextX] = this.PATH;
+                        
+                        stack.push([nextX, nextY]);
+                    } else {
+                        stack.pop();
+                    }
+                }
+            }
+
+            getUnvisitedNeighbors(x, y, directions) {
+                const neighbors = [];
+                
+                for (const [dx, dy] of directions) {
+                    const newX = x + dx;
+                    const newY = y + dy;
+                    
+                    if (this.isValidCell(newX, newY) && this.maze[newY][newX] === this.WALL) {
+                        neighbors.push([newX, newY]);
+                    }
+                }
+                
+                return neighbors;
+            }
+
+            isValidCell(x, y) {
+                return x >= 1 && x < this.width - 1 && y >= 1 && y < this.height - 1;
+            }
+
+            findSolution() {
+                const queue = [[1, 1, [[1, 1]]]];
+                const visited = new Set(['1,1']);
+                const endX = this.width - 2;
+                const endY = this.height - 2;
+
+                while (queue.length > 0) {
+                    const [x, y, path] = queue.shift();
+
+                    if (x === endX && y === endY) {
+                        this.solution = path;
+                        return;
+                    }
+
+                    const neighbors = [[x+1, y], [x-1, y], [x, y+1], [x, y-1]];
+                    
+                    for (const [nextX, nextY] of neighbors) {
+                        const key = `${nextX},${nextY}`;
+                        
+                        if (this.isValidMove(nextX, nextY) && !visited.has(key)) {
+                            visited.add(key);
+                            queue.push([nextX, nextY, [...path, [nextX, nextY]]]);
+                        }
+                    }
+                }
+                
+                this.solution = [];
+            }
+
+            isValidMove(x, y) {
+                return x >= 0 && x < this.width && 
+                       y >= 0 && y < this.height && 
+                       this.maze[y][x] === this.PATH;
+            }
+        }
+
+        class MazeRenderer {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.cellSize = 20;
+                this.showSolution = false;
+                
+                // Colors
+                this.WALL_COLOR = '#1e293b';
+                this.PATH_COLOR = '#ffffff';
+                this.SOLUTION_COLOR = '#ef4444';
+                this.START_COLOR = '#10b981';
+                this.END_COLOR = '#3b82f6';
+            }
+
+            setCellSize(size) {
+                this.cellSize = Math.max(10, Math.min(40, size));
+            }
+
+            render(maze, solution = []) {
+                try {
+                    if (!maze || !maze.maze) {
+                        throw new Error('Invalid maze data');
+                    }
+
+                    const width = maze.width * this.cellSize;
+                    const height = maze.height * this.cellSize;
+                    
+                    this.canvas.width = width;
+                    this.canvas.height = height;
+                    
+                    this.ctx.clearRect(0, 0, width, height);
+                    
+                    this.drawMaze(maze.maze);
+                    
+                    if (this.showSolution && solution.length > 0) {
+                        this.drawSolution(solution);
+                    }
+                    
+                    this.drawStartEnd(maze);
+                } catch (error) {
+                    console.error('Error rendering maze:', error);
+                }
+            }
+
+            drawMaze(mazeData) {
+                for (let y = 0; y < mazeData.length; y++) {
+                    for (let x = 0; x < mazeData[y].length; x++) {
+                        const cellX = x * this.cellSize;
+                        const cellY = y * this.cellSize;
+                        
+                        this.ctx.fillStyle = mazeData[y][x] === 1 ? this.WALL_COLOR : this.PATH_COLOR;
+                        this.ctx.fillRect(cellX, cellY, this.cellSize, this.cellSize);
+                    }
+                }
+            }
+
+            drawSolution(solution) {
+                if (solution.length < 2) return;
+                
+                this.ctx.strokeStyle = this.SOLUTION_COLOR;
+                this.ctx.lineWidth = Math.max(2, this.cellSize / 8);
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+                
+                this.ctx.beginPath();
+                
+                for (let i = 0; i < solution.length; i++) {
+                    const [x, y] = solution[i];
+                    const centerX = x * this.cellSize + this.cellSize / 2;
+                    const centerY = y * this.cellSize + this.cellSize / 2;
+                    
+                    if (i === 0) {
+                        this.ctx.moveTo(centerX, centerY);
+                    } else {
+                        this.ctx.lineTo(centerX, centerY);
+                    }
+                }
+                
+                this.ctx.stroke();
+            }
+
+            drawStartEnd(maze) {
+                const startX = this.cellSize + this.cellSize / 2;
+                const startY = this.cellSize + this.cellSize / 2;
+                const endX = (maze.width - 2) * this.cellSize + this.cellSize / 2;
+                const endY = (maze.height - 2) * this.cellSize + this.cellSize / 2;
+                const radius = this.cellSize / 4;
+                
+                // Start point
+                this.ctx.fillStyle = this.START_COLOR;
+                this.ctx.beginPath();
+                this.ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+                this.ctx.fill();
+                
+                // End point
+                this.ctx.fillStyle = this.END_COLOR;
+                this.ctx.beginPath();
+                this.ctx.arc(endX, endY, radius, 0, 2 * Math.PI);
+                this.ctx.fill();
+            }
+
+            toggleSolution() {
+                this.showSolution = !this.showSolution;
+            }
+
+            clearSolution() {
+                this.showSolution = false;
+            }
+        }
+
+        class MazeApp {
+            constructor() {
+                this.canvas = document.getElementById('mazeCanvas');
+                this.renderer = new MazeRenderer(this.canvas);
+                this.currentMaze = null;
+                
+                this.initializeControls();
+                this.generateNewMaze();
+            }
+
+            initializeControls() {
+                // Range inputs with value display
+                const widthInput = document.getElementById('mazeWidth');
+                const heightInput = document.getElementById('mazeHeight');
+                const sizeInput = document.getElementById('cellSize');
+                
+                const widthValue = document.getElementById('widthValue');
+                const heightValue = document.getElementById('heightValue');
+                const sizeValue = document.getElementById('sizeValue');
+                
+                widthInput.addEventListener('input', (e) => {
+                    widthValue.textContent = e.target.value;
+                });
+                
+                heightInput.addEventListener('input', (e) => {
+                    heightValue.textContent = e.target.value;
+                });
+                
+                sizeInput.addEventListener('input', (e) => {
+                    sizeValue.textContent = e.target.value;
+                    this.renderer.setCellSize(parseInt(e.target.value));
+                    if (this.currentMaze) {
+                        this.renderer.render(this.currentMaze, this.currentMaze.solution);
+                    }
+                });
+                
+                // Buttons
+                document.getElementById('generateBtn').addEventListener('click', () => {
+                    this.generateNewMaze();
+                });
+                
+                document.getElementById('solutionBtn').addEventListener('click', () => {
+                    this.toggleSolution();
+                });
+                
+                document.getElementById('clearBtn').addEventListener('click', () => {
+                    this.clearSolution();
+                });
+            }
+
+            generateNewMaze() {
+                try {
+                    const width = parseInt(document.getElementById('mazeWidth').value);
+                    const height = parseInt(document.getElementById('mazeHeight').value);
+                    
+                    if (width < 11 || height < 11 || width > 51 || height > 51) {
+                        throw new Error('Invalid maze dimensions');
+                    }
+                    
+                    this.currentMaze = new MazeGenerator(width, height);
+                    this.currentMaze.generate();
+                    
+                    this.renderer.clearSolution();
+                    this.renderer.render(this.currentMaze);
+                    
+                    this.updateButtonStates();
+                } catch (error) {
+                    console.error('Error generating maze:', error);
+                    alert('Failed to generate maze. Please try again.');
+                }
+            }
+
+            toggleSolution() {
+                if (!this.currentMaze) return;
+                
+                this.renderer.toggleSolution();
+                this.renderer.render(this.currentMaze, this.currentMaze.solution);
+                this.updateButtonStates();
+            }
+
+            clearSolution() {
+                if (!this.currentMaze) return;
+                
+                this.renderer.clearSolution();
+                this.renderer.render(this.currentMaze);
+                this.updateButtonStates();
+            }
+
+            updateButtonStates() {
+                const solutionBtn = document.getElementById('solutionBtn');
+                const clearBtn = document.getElementById('clearBtn');
+                
+                if (this.renderer.showSolution) {
+                    solutionBtn.textContent = 'Hide Solution';
+                    clearBtn.disabled = false;
+                } else {
+                    solutionBtn.textContent = 'Show Solution';
+                    clearBtn.disabled = true;
+                }
+            }
+        }
+
+        // Initialize the application when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                new MazeApp();
+            } catch (error) {
+                console.error('Failed to initialize maze application:', error);
+                alert('Failed to initialize the maze generator. Please refresh the page.');
+            }
+        });
+    </script>
+</body>
+</html>

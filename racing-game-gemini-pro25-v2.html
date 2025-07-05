@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>2D Racing Game - Enhanced</title>
+    <style>
+        body { margin: 0; background-color: #333; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; font-family: Arial, sans-serif; }
+        canvas { border: 1px solid white; background-color: #558855; /* Grass color */ }
+        #hud { padding: 10px; color: white; font-size: 18px; background-color: rgba(0,0,0,0.5); border-radius: 5px; margin-bottom:10px; text-align: left; width: 780px;}
+        #hud p { margin: 5px 0; }
+        .off-track-text { color: #ff8888; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <p>Current Lap: <span id="currentLapTime">0.00</span>s</p>
+        <p>Best Lap: <span id="bestLapTime">N/A</span></p>
+        <p>Coins: <span id="coinsCollected">0</span></p>
+        <p>Speed Boost: <span id="speedBoostStatus">Inactive</span></p>
+        <p>Track Status: <span id="trackStatus">On Track</span></p>
+        <p style="font-size: 14px;">Controls: WASD/Arrows. R to Reset.</p>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // Game Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+
+        // HUD Elements
+        const currentLapTimeEl = document.getElementById('currentLapTime');
+        const bestLapTimeEl = document.getElementById('bestLapTime');
+        const coinsCollectedEl = document.getElementById('coinsCollected');
+        const speedBoostStatusEl = document.getElementById('speedBoostStatus');
+        const trackStatusEl = document.getElementById('trackStatus');
+
+        // Game State
+        let keys = {};
+        let lapStartTime = 0;
+        let currentLapTime = 0;
+        let bestLapTime = localStorage.getItem('bestLapTime') ? parseFloat(localStorage.getItem('bestLapTime')) : Infinity;
+        let coinsCount = 0;
+        let gameRunning = false;
+        let raceStartedForLap = false;
+
+        // Car Properties
+        const CAR_WIDTH = 20;
+        const CAR_HEIGHT = 35;
+        const ARROW_SIZE = 8; 
+
+        let car = {
+            x: 0, 
+            y: 0, 
+            width: CAR_WIDTH,
+            height: CAR_HEIGHT,
+            angle: 0, 
+            speed: 0,
+            // Base rates, not affected by off-track directly
+            originalAccelerationRate: 0.12,
+            originalMaxSpeed: 3.5, 
+            
+            friction: 0.03,
+            brakeForce: 0.2,
+            turnSpeedFactor: 0.04, // Slightly increased for better stationary turn
+            isBraking: false,
+            isReversing: false,
+            brakeStartTime: null,
+            reverseMaxSpeed: 0, // Will be set dynamically (-currentBaseMaxSpeed)
+            
+            boostActive: false,
+            boostEndTime: 0,
+            isOnTrack: true,
+
+            draw: function() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+
+                let baseColor = 'hsl(240, 80%, 60%)'; // Blue
+                if (!this.isOnTrack) {
+                    baseColor = 'hsl(240, 60%, 45%)'; // Darker blue when off-track
+                }
+                if (this.boostActive) {
+                    baseColor = this.isOnTrack ? 'hsl(200, 90%, 65%)' : 'hsl(200, 70%, 50%)'; // Cyan-ish when boosted
+                }
+                
+                ctx.fillStyle = baseColor;
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.moveTo(0, -this.height / 2 - ARROW_SIZE * 0.3); 
+                ctx.lineTo(-ARROW_SIZE / 2, -this.height / 2 + ARROW_SIZE * 0.7);
+                ctx.lineTo(ARROW_SIZE / 2, -this.height / 2 + ARROW_SIZE * 0.7);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(-this.width/4 - 1.5, -this.height/2 - 1, 3, 3);
+                ctx.fillRect(this.width/4 - 1.5, -this.height/2 - 1, 3, 3);
+
+                ctx.restore();
+            },
+
+            isPointOffTrack: function(px, py) {
+                let minDistanceToTrackCenterline = Infinity;
+                if (trackPath.length < 2) return true; // No track defined
+
+                for (let i = 0; i < trackPath.length - 1; i++) {
+                    const p1 = trackPath[i];
+                    const p2 = trackPath[i+1];
+
+                    const l2 = (p2.x - p1.x)**2 + (p2.y - p1.y)**2;
+                    if (l2 === 0) { // segment is a point
+                        const dist = Math.sqrt((px - p1.x)**2 + (py - p1.y)**2);
+                        minDistanceToTrackCenterline = Math.min(minDistanceToTrackCenterline, dist);
+                        continue;
+                    }
+
+                    let t = ((px - p1.x) * (p2.x - p1.x) + (py - p1.y) * (p2.y - p1.y)) / l2;
+                    t = Math.max(0, Math.min(1, t)); 
+
+                    const closestX = p1.x + t * (p2.x - p1.x);
+                    const closestY = p1.y + t * (p2.y - p1.y);
+
+                    const dist = Math.sqrt((px - closestX)**2 + (py - closestY)**2);
+                    minDistanceToTrackCenterline = Math.min(minDistanceToTrackCenterline, dist);
+                }
+                return minDistanceToTrackCenterline > TRACK_WIDTH / 2 + 2; // +2 for a little leeway
+            },
+
+            update: function() {
+                this.isOnTrack = !this.isPointOffTrack(this.x, this.y);
+
+                let currentBaseMaxSpeed = this.isOnTrack ? this.originalMaxSpeed : this.originalMaxSpeed * 0.5;
+                let currentBaseAccelerationRate = this.isOnTrack ? this.originalAccelerationRate : this.originalAccelerationRate * 0.5;
+                
+                this.reverseMaxSpeed = -currentBaseMaxSpeed; // Backward speed matches forward (potentially penalized)
+
+                let turnInput = 0;
+                if (keys['KeyA'] || keys['ArrowLeft']) turnInput = -1;
+                if (keys['KeyD'] || keys['ArrowRight']) turnInput = 1;
+
+                if (this.speed === 0) {
+                    this.angle += turnInput * this.turnSpeedFactor; // Turn when stationary
+                } else {
+                    // Adjust turn speed based on current speed (more control at lower speeds)
+                    let speedRatio = Math.min(1, Math.abs(this.speed) / (this.originalMaxSpeed * 0.6));
+                    this.angle += turnInput * this.turnSpeedFactor * Math.sign(this.speed) * (speedRatio * 0.7 + 0.3);
+                }
+
+
+                let actualAccelerationRate = this.boostActive ? currentBaseAccelerationRate * 1.8 : currentBaseAccelerationRate;
+                let actualMaxSpeed = this.boostActive ? currentBaseMaxSpeed * 1.5 : currentBaseMaxSpeed;
+                
+                this.isBraking = (keys['KeyS'] || keys['ArrowDown']);
+
+                if (keys['KeyW'] || keys['ArrowUp']) { // Accelerate
+                    if (this.speed < actualMaxSpeed) {
+                        this.speed += actualAccelerationRate;
+                    } else {
+                        this.speed = actualMaxSpeed;
+                    }
+                    this.isReversing = false; 
+                    this.brakeStartTime = null;
+                    if (!raceStartedForLap && gameRunning) {
+                        lapStartTime = performance.now();
+                        raceStartedForLap = true;
+                    }
+                } else if (this.isBraking) { // Braking or Preparing/Is Reversing
+                    if (this.speed > 0) { 
+                        this.speed -= this.brakeForce;
+                        if (this.speed < 0) this.speed = 0;
+                    } else if (this.speed < 0) { 
+                        this.speed += this.brakeForce;
+                        if (this.speed > 0) this.speed = 0;
+                    }
+
+                    if (this.speed === 0) { 
+                        if (this.brakeStartTime === null) {
+                            this.brakeStartTime = performance.now();
+                        } else if (!this.isReversing && (performance.now() - this.brakeStartTime > 500)) { 
+                            this.isReversing = true;
+                        }
+                    }
+                    
+                    if(this.isReversing && this.isBraking) { 
+                        if (this.speed > this.reverseMaxSpeed) { // reverseMaxSpeed is negative
+                             this.speed -= actualAccelerationRate; // Use full (potentially penalized) accel rate
+                        } else {
+                            this.speed = this.reverseMaxSpeed;
+                        }
+                        if (!raceStartedForLap && gameRunning) {
+                            lapStartTime = performance.now();
+                            raceStartedForLap = true;
+                        }
+                    }
+                } else { 
+                    this.brakeStartTime = null; 
+                    if (this.isReversing && this.speed === 0) { 
+                        this.isReversing = false; 
+                    }
+
+                    if (this.speed > 0) {
+                        this.speed -= this.friction;
+                        if (this.speed < 0) this.speed = 0;
+                    } else if (this.speed < 0) {
+                        this.speed += this.friction;
+                        if (this.speed > 0) this.speed = 0;
+                    }
+                }
+                
+                this.x += Math.sin(this.angle) * this.speed;
+                this.y -= Math.cos(this.angle) * this.speed;
+
+                if (this.boostActive && performance.now() > this.boostEndTime) {
+                    this.boostActive = false;
+                }
+                
+                if (this.x < this.width / 2) { this.x = this.width / 2; this.speed *= -0.3; }
+                if (this.x > canvas.width - this.width / 2) { this.x = canvas.width - this.width / 2; this.speed *= -0.3; }
+                if (this.y < this.height / 2) { this.y = this.height / 2; this.speed *= -0.3; }
+                if (this.y > canvas.height - this.height / 2) { this.y = canvas.height - this.height / 2; this.speed *= -0.3; }
+            },
+            applyBoost: function() {
+                if (this.boostActive && performance.now() < this.boostEndTime) { // If already boosted, extend
+                    this.boostEndTime += 1000; // Add 1 sec more to existing boost
+                } else {
+                    this.boostEndTime = performance.now() + 2000; 
+                }
+                this.boostActive = true;
+            },
+            reset: function(startX, startY, startAngle) {
+                this.x = startX;
+                this.y = startY;
+                this.angle = startAngle;
+                this.speed = 0;
+                this.isBraking = false;
+                this.isReversing = false;
+                this.brakeStartTime = null;
+                this.boostActive = false;
+                this.isOnTrack = true; // Assume starting on track
+                raceStartedForLap = false;
+                currentLapTime = 0; 
+                currentLapTimeEl.textContent = "0.00";
+                lapStartTime = performance.now(); 
+            }
+        };
+
+        const trackPath = [
+            { x: 100, y: 500 }, { x: 100, y: 100 }, { x: 300, y: 100 }, { x: 300, y: 300 }, 
+            { x: 500, y: 300 }, { x: 700, y: 150 }, { x: 700, y: 450 }, { x: 500, y: 500 }, 
+            { x: 100, y: 500 }
+        ];
+        const TRACK_WIDTH = 70;
+
+        const finishLine = {
+            x: 100 - (TRACK_WIDTH)/2, 
+            y: trackPath[0].y - 5, 
+            width: TRACK_WIDTH, 
+            height: 10,
+        };
+        const CAR_START_X = trackPath[0].x; 
+        const CAR_START_Y = trackPath[0].y; 
+        const CAR_START_ANGLE = 0; 
+
+        let checkpoints = [];
+        const CP_GATE_WIDTH = TRACK_WIDTH + 10;
+        const CP_THICKNESS = 10;
+
+        function initializeCheckpoints() {
+            checkpoints = [
+                { id: 0, x: trackPath[0].x - CP_GATE_WIDTH/2, y: (trackPath[0].y + trackPath[1].y)/2 - CP_THICKNESS/2, width: CP_GATE_WIDTH, height: CP_THICKNESS, passed: false, color: 'rgba(255, 223, 0, 0.6)' },
+                { id: 1, x: (trackPath[1].x + trackPath[2].x)/2 - CP_THICKNESS/2, y: trackPath[1].y - CP_GATE_WIDTH/2, width: CP_THICKNESS, height: CP_GATE_WIDTH, passed: false, color: 'rgba(255, 223, 0, 0.6)' },
+                { id: 2, x: trackPath[3].x - CP_GATE_WIDTH/2, y: (trackPath[3].y + trackPath[2].y)/2 - CP_THICKNESS/2, width: CP_GATE_WIDTH, height: CP_THICKNESS, passed: false, color: 'rgba(255, 223, 0, 0.6)' },
+                { id: 3, x: (trackPath[4].x + trackPath[5].x)/2 - CP_THICKNESS/2, y: (trackPath[4].y + trackPath[5].y)/2  - CP_GATE_WIDTH/2, width: CP_THICKNESS, height: CP_GATE_WIDTH, passed: false, color: 'rgba(255, 223, 0, 0.6)' },
+                { id: 4, x: trackPath[6].x - CP_GATE_WIDTH/2, y: (trackPath[6].y + trackPath[5].y)/2 - CP_THICKNESS/2, width: CP_GATE_WIDTH, height: CP_THICKNESS, passed: false, color: 'rgba(255, 223, 0, 0.6)' },
+                { id: 5, x: (trackPath[7].x + trackPath[6].x)/2 - CP_THICKNESS/2, y: (trackPath[7].y + trackPath[6].y)/2 - CP_GATE_WIDTH/2, width: CP_THICKNESS, height: CP_GATE_WIDTH, passed: false, color: 'rgba(255, 223, 0, 0.6)' },
+            ];
+            nextCheckpointIndex = 0;
+        }
+        let nextCheckpointIndex = 0;
+
+        let trackCoins = [];
+        let speedBoosts = [];
+
+        function initializeCollectibles() {
+            trackCoins = [
+                { x: 100, y: 200, radius: 7, collected: false, color: 'gold' },
+                { x: 250, y: 100, radius: 7, collected: false, color: 'gold' },
+                { x: 300, y: 250, radius: 7, collected: false, color: 'gold' },
+                { x: 600, y: 200, radius: 7, collected: false, color: 'gold' },
+                { x: 700, y: 400, radius: 7, collected: false, color: 'gold' },
+                { x: 400, y: 500, radius: 7, collected: false, color: 'gold' }
+            ];
+            speedBoosts = [
+                { x: 180, y: 150, radius: 10, collected: false, color: 'cyan' },
+                { x: 500, y: 400, radius: 10, collected: false, color: 'cyan' },
+                { x: 650, y: 120, radius: 10, collected: false, color: 'cyan' }
+            ];
+            coinsCount = 0;
+            coinsCollectedEl.textContent = coinsCount;
+        }
+        
+        function resetCollectiblesAndCoins() {
+            trackCoins.forEach(c => c.collected = false);
+            speedBoosts.forEach(s => s.collected = false);
+            coinsCount = 0; 
+            coinsCollectedEl.textContent = coinsCount;
+        }
+
+        function drawTrack() {
+            ctx.strokeStyle = '#606060'; 
+            ctx.lineWidth = TRACK_WIDTH;
+            ctx.lineCap = 'round'; 
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(trackPath[0].x, trackPath[0].y);
+            for (let i = 1; i < trackPath.length; i++) {
+                ctx.lineTo(trackPath[i].x, trackPath[i].y);
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(trackPath[0].x, trackPath[0].y);
+            for (let i = 1; i < trackPath.length; i++) {
+                ctx.lineTo(trackPath[i].x, trackPath[i].y);
+            }
+            ctx.setLineDash([]);
+        }
+
+        function drawFinishLine() {
+            ctx.fillStyle = 'white';
+            const squareSize = finishLine.height / 2; 
+            for (let i = 0; i < finishLine.width / squareSize; i++) {
+                for (let j = 0; j < 2; j++) { 
+                    ctx.fillStyle = (i + j) % 2 === 0 ? 'white' : 'black';
+                    ctx.fillRect(finishLine.x + i * squareSize, finishLine.y + j * squareSize, squareSize, squareSize);
+                }
+            }
+        }
+
+        function drawCheckpoints() {
+            checkpoints.forEach((cp, index) => {
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = cp.passed ? 'rgba(0, 255, 0, 0.4)' : (index === nextCheckpointIndex ? 'rgba(255, 165, 0, 0.8)' : cp.color);
+                ctx.fillRect(cp.x, cp.y, cp.width, cp.height);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(cp.x, cp.y, cp.width, cp.height);
+                ctx.globalAlpha = 1.0;
+            });
+        }
+
+        function drawCollectibles() {
+            trackCoins.forEach(coin => {
+                if (!coin.collected) {
+                    ctx.beginPath();
+                    ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = coin.color;
+                    ctx.fill();
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.font = "bold " + (coin.radius) + "px Arial";
+                    ctx.fillText("$", coin.x, coin.y + 1);
+                }
+            });
+            speedBoosts.forEach(boost => {
+                if (!boost.collected) {
+                    ctx.beginPath();
+                    ctx.arc(boost.x, boost.y, boost.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = boost.color;
+                    ctx.fill();
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.fillStyle = 'black';
+                    ctx.font = "bold " + (boost.radius*0.8) + "px Arial";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText("SPD", boost.x, boost.y);
+                }
+            });
+        }
+        
+        function isCarCenterInRect(carObj, rect) {
+            return carObj.x >= rect.x && carObj.x <= rect.x + rect.width &&
+                   carObj.y >= rect.y && carObj.y <= rect.y + rect.height;
+        }
+        
+        function isCarIntersectingCircle(carObj, circle) {
+            const carRadius = Math.max(carObj.width, carObj.height) / 2;
+            const distX = carObj.x - circle.x;
+            const distY = carObj.y - circle.y;
+            const distance = Math.sqrt(distX * distX + distY * distY);
+            return distance < circle.radius + carRadius * 0.7;
+        }
+
+        function updateHUD() {
+            currentLapTimeEl.textContent = currentLapTime.toFixed(2);
+            bestLapTimeEl.textContent = bestLapTime === Infinity ? "N/A" : bestLapTime.toFixed(2) + "s";
+            coinsCollectedEl.textContent = coinsCount;
+
+            if (car.boostActive) {
+                let timeLeft = (car.boostEndTime - performance.now()) / 1000;
+                speedBoostStatusEl.textContent = `ACTIVE! (${timeLeft.toFixed(1)}s)`;
+                speedBoostStatusEl.style.color = 'cyan';
+            } else {
+                speedBoostStatusEl.textContent = "Inactive";
+                speedBoostStatusEl.style.color = 'white';
+            }
+
+            if (car.isOnTrack) {
+                trackStatusEl.textContent = "On Track";
+                trackStatusEl.className = "";
+            } else {
+                trackStatusEl.textContent = "Off Track (Speed Penalty!)";
+                trackStatusEl.className = "off-track-text";
+            }
+        }
+
+        function updateGame() {
+            if (!gameRunning) return;
+
+            car.update();
+
+            if (nextCheckpointIndex < checkpoints.length) {
+                const currentCheckpoint = checkpoints[nextCheckpointIndex];
+                if (!currentCheckpoint.passed && isCarCenterInRect(car, currentCheckpoint)) {
+                    currentCheckpoint.passed = true;
+                    nextCheckpointIndex++;
+                }
+            }
+
+            if (nextCheckpointIndex === checkpoints.length) { 
+                if (isCarCenterInRect(car, finishLine)) {
+                    if (raceStartedForLap) { 
+                        finishLap();
+                    }
+                }
+            }
+
+            trackCoins.forEach(coin => {
+                if (!coin.collected && isCarIntersectingCircle(car, coin)) {
+                    coin.collected = true;
+                    coinsCount++;
+                }
+            });
+            speedBoosts.forEach(boost => {
+                if (!boost.collected && isCarIntersectingCircle(car, boost)) {
+                    boost.collected = true;
+                    car.applyBoost();
+                }
+            });
+
+            if (raceStartedForLap) {
+                currentLapTime = (performance.now() - lapStartTime) / 1000;
+            }
+            updateHUD();
+        }
+        
+        function finishLap() {
+            currentLapTime = (performance.now() - lapStartTime) / 1000;
+            if (currentLapTime < bestLapTime) {
+                bestLapTime = currentLapTime;
+                localStorage.setItem('bestLapTime', bestLapTime.toString());
+            }
+            
+            lapStartTime = performance.now(); 
+            raceStartedForLap = true; 
+            
+            checkpoints.forEach(cp => cp.passed = false);
+            nextCheckpointIndex = 0;
+            
+            resetCollectiblesAndCoins(); 
+        }
+
+        function drawGame() {
+            ctx.fillStyle = '#558855'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawTrack();
+            drawFinishLine();
+            drawCheckpoints();
+            drawCollectibles();
+            car.draw();
+
+            if (!gameRunning) {
+                ctx.fillStyle = "rgba(0,0,0,0.7)";
+                ctx.fillRect(0, canvas.height/2 - 50, canvas.width, 100);
+                ctx.fillStyle = "white";
+                ctx.font = "30px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("Press any key to Start", canvas.width / 2, canvas.height / 2 - 10);
+                ctx.font = "18px Arial";
+                ctx.fillText("WASD/Arrows to Drive. R to Reset.", canvas.width / 2, canvas.height / 2 + 20);
+            }
+        }
+
+        function gameLoop() {
+            updateGame();
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            car.reset(CAR_START_X, CAR_START_Y, CAR_START_ANGLE);
+            initializeCollectibles(); 
+            initializeCheckpoints();
+            
+            if (gameRunning) { 
+                lapStartTime = performance.now();
+                raceStartedForLap = false; 
+            }
+            currentLapTimeEl.textContent = "0.00"; // Visually reset
+            updateHUD(); // Update all HUD elements
+        }
+        
+        window.addEventListener('keydown', (e) => {
+            if (!gameRunning && e.key !== 'R' && e.key !== 'F12' && e.key !== 'Control' && e.key !== 'Shift' && e.key !== 'Alt') { 
+                gameRunning = true;
+                resetGame(); 
+                lapStartTime = performance.now(); 
+                raceStartedForLap = false;
+            }
+            keys[e.code] = true;
+
+            if (e.code === 'KeyR') {
+                resetGame();
+                if (!gameRunning) { 
+                    // Game remains in "press key to start" but state is reset
+                } else {
+                    lapStartTime = performance.now(); 
+                    raceStartedForLap = false;
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        car.x = CAR_START_X;
+        car.y = CAR_START_Y;
+        car.angle = CAR_START_ANGLE;
+        
+        initializeCollectibles();
+        initializeCheckpoints();
+        resetGame(); 
+        gameRunning = false;
+
+        gameLoop();
+    </script>
+</body>
+</html>

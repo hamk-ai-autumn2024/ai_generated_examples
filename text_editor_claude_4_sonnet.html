@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Text Editor</title>
+    <style>
+        :root {
+            --primary-bg: #1e1e1e;
+            --secondary-bg: #2d2d30;
+            --text-color: #d4d4d4;
+            --border-color: #3e3e42;
+            --line-number-bg: #252526;
+            --line-number-color: #858585;
+            --selection-bg: #264f78;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--secondary-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background-color: var(--secondary-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--border-color);
+        }
+
+        .status {
+            font-size: 12px;
+            color: var(--line-number-color);
+        }
+
+        main {
+            display: flex;
+            height: calc(100vh - 50px);
+        }
+
+        .line-numbers {
+            background-color: var(--line-number-bg);
+            color: var(--line-number-color);
+            padding: 12px 8px;
+            font-size: 14px;
+            line-height: 1.5;
+            text-align: right;
+            user-select: none;
+            border-right: 1px solid var(--border-color);
+            min-width: 50px;
+            white-space: pre;
+            overflow: hidden;
+        }
+
+        .editor-container {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+        }
+
+        .editor {
+            width: 100%;
+            height: 100%;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            border: none;
+            outline: none;
+            padding: 12px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: none;
+            tab-size: 4;
+        }
+
+        .editor::selection {
+            background-color: var(--selection-bg);
+        }
+
+        .hidden-input {
+            position: absolute;
+            left: -9999px;
+            opacity: 0;
+        }
+
+        footer {
+            background-color: var(--secondary-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 4px 16px;
+            font-size: 11px;
+            color: var(--line-number-color);
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 6px 12px;
+            }
+            
+            .btn {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            
+            .line-numbers {
+                min-width: 40px;
+                padding: 12px 4px;
+                font-size: 12px;
+            }
+            
+            .editor {
+                font-size: 12px;
+                padding: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .line-numbers {
+                display: none;
+            }
+            
+            main {
+                height: calc(100vh - 80px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="toolbar">
+            <button class="btn" id="newBtn" title="New (Ctrl+N)">New</button>
+            <button class="btn" id="openBtn" title="Open (Ctrl+O)">Open</button>
+            <button class="btn" id="saveBtn" title="Save (Ctrl+S)">Save</button>
+            <button class="btn" id="saveAsBtn" title="Save As (Ctrl+Shift+S)">Save As</button>
+        </div>
+        <div class="status">
+            <span id="filename">Untitled</span> | 
+            <span id="position">Line 1, Column 1</span> | 
+            <span id="wordCount">0 words</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="line-numbers" id="lineNumbers">1</div>
+        <div class="editor-container">
+            <textarea class="editor" id="editor" placeholder="Start typing..."></textarea>
+        </div>
+    </main>
+
+    <footer>
+        <span>Modern Text Editor | Use Ctrl+S to save, Ctrl+O to open, Ctrl+N for new file</span>
+    </footer>
+
+    <input type="file" class="hidden-input" id="fileInput" accept=".txt,.js,.html,.css,.json,.md">
+
+    <script>
+        class TextEditor {
+            constructor() {
+                this.editor = document.getElementById('editor');
+                this.lineNumbers = document.getElementById('lineNumbers');
+                this.filename = document.getElementById('filename');
+                this.position = document.getElementById('position');
+                this.wordCount = document.getElementById('wordCount');
+                this.fileInput = document.getElementById('fileInput');
+                
+                this.currentFilename = 'Untitled';
+                this.isDirty = false;
+                
+                this.initializeEventListeners();
+                this.updateLineNumbers();
+                this.updateStatus();
+            }
+
+            initializeEventListeners() {
+                // Editor events
+                this.editor.addEventListener('input', () => {
+                    this.updateLineNumbers();
+                    this.updateStatus();
+                    this.isDirty = true;
+                });
+
+                this.editor.addEventListener('scroll', () => {
+                    this.lineNumbers.scrollTop = this.editor.scrollTop;
+                });
+
+                this.editor.addEventListener('click', () => this.updateStatus());
+                this.editor.addEventListener('keyup', () => this.updateStatus());
+
+                // Button events
+                document.getElementById('newBtn').addEventListener('click', () => this.newFile());
+                document.getElementById('openBtn').addEventListener('click', () => this.openFile());
+                document.getElementById('saveBtn').addEventListener('click', () => this.saveFile());
+                document.getElementById('saveAsBtn').addEventListener('click', () => this.saveAsFile());
+
+                // File input
+                this.fileInput.addEventListener('change', (e) => this.handleFileLoad(e));
+
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => this.handleKeydown(e));
+
+                // Prevent tab from leaving textarea
+                this.editor.addEventListener('keydown', (e) => {
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const start = this.editor.selectionStart;
+                        const end = this.editor.selectionEnd;
+                        
+                        this.editor.value = this.editor.value.substring(0, start) + 
+                                          '\t' + 
+                                          this.editor.value.substring(end);
+                        
+                        this.editor.selectionStart = this.editor.selectionEnd = start + 1;
+                        this.updateLineNumbers();
+                        this.updateStatus();
+                    }
+                });
+            }
+
+            handleKeydown(e) {
+                if (e.ctrlKey || e.metaKey) {
+                    switch(e.key.toLowerCase()) {
+                        case 'n':
+                            e.preventDefault();
+                            this.newFile();
+                            break;
+                        case 'o':
+                            e.preventDefault();
+                            this.openFile();
+                            break;
+                        case 's':
+                            e.preventDefault();
+                            if (e.shiftKey) {
+                                this.saveAsFile();
+                            } else {
+                                this.saveFile();
+                            }
+                            break;
+                        case 'a':
+                            // Allow default Ctrl+A behavior
+                            break;
+                        case 'z':
+                            // Allow default Ctrl+Z behavior
+                            break;
+                        case 'y':
+                            // Allow default Ctrl+Y behavior
+                            break;
+                        case 'c':
+                        case 'v':
+                        case 'x':
+                            // Allow default copy/paste/cut behavior
+                            break;
+                    }
+                }
+            }
+
+            newFile() {
+                if (this.isDirty && this.editor.value.trim()) {
+                    const proceed = confirm('You have unsaved changes. Continue anyway?');
+                    if (!proceed) return;
+                }
+                
+                this.editor.value = '';
+                this.currentFilename = 'Untitled';
+                this.isDirty = false;
+                this.updateFilename();
+                this.updateLineNumbers();
+                this.updateStatus();
+                this.editor.focus();
+            }
+
+            openFile() {
+                this.fileInput.click();
+            }
+
+            handleFileLoad(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        this.editor.value = e.target.result;
+                        this.currentFilename = file.name;
+                        this.isDirty = false;
+                        this.updateFilename();
+                        this.updateLineNumbers();
+                        this.updateStatus();
+                        this.editor.focus();
+                    } catch (error) {
+                        console.error('Error loading file:', error);
+                    }
+                };
+                reader.readAsText(file);
+                
+                // Reset file input
+                event.target.value = '';
+            }
+
+            saveFile() {
+                this.downloadFile(this.currentFilename, this.editor.value);
+                this.isDirty = false;
+                this.updateFilename();
+            }
+
+            saveAsFile() {
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const defaultName = this.currentFilename === 'Untitled' ? 
+                    `document-${timestamp}.txt` : this.currentFilename;
+                
+                this.downloadFile(defaultName, this.editor.value);
+                this.isDirty = false;
+            }
+
+            downloadFile(filename, content) {
+                try {
+                    const blob = new Blob([content], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (error) {
+                    console.error('Error saving file:', error);
+                }
+            }
+
+            updateLineNumbers() {
+                const lines = this.editor.value.split('\n').length;
+                const lineNumbersText = Array.from({length: lines}, (_, i) => i + 1).join('\n');
+                this.lineNumbers.textContent = lineNumbersText;
+            }
+
+            updateStatus() {
+                const text = this.editor.value;
+                const cursorPos = this.editor.selectionStart;
+                
+                // Calculate line and column
+                const textBeforeCursor = text.substring(0, cursorPos);
+                const lines = textBeforeCursor.split('\n');
+                const line = lines.length;
+                const column = lines[lines.length - 1].length + 1;
+                
+                // Calculate word count
+                const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+                
+                this.position.textContent = `Line ${line}, Column ${column}`;
+                this.wordCount.textContent = `${words} words`;
+            }
+
+            updateFilename() {
+                const displayName = this.isDirty ? `${this.currentFilename} *` : this.currentFilename;
+                this.filename.textContent = displayName;
+                document.title = `${displayName} - Modern Text Editor`;
+            }
+        }
+
+        // Initialize the editor when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new TextEditor();
+        });
+
+        // Prevent accidental page refresh
+        window.addEventListener('beforeunload', (e) => {
+            const editor = document.getElementById('editor');
+            if (editor && editor.value.trim()) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+</body>
+</html>

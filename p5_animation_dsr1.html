@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colorful Particle Universe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        .title {
+            position: absolute;
+            top: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            text-align: center;
+            width: 100%;
+            font-size: 28px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            z-index: 100;
+        }
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            text-align: center;
+            width: 100%;
+            font-size: 16px;
+            z-index: 100;
+        }
+        .controls {
+            position: absolute;
+            left: 20px;
+            top: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            padding: 15px;
+            color: white;
+            z-index: 100;
+            max-width: 200px;
+        }
+        .control-item {
+            margin: 10px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="title">Colorful Particle Universe</div>
+    <div class="instructions">Move your mouse to interact | Click to create explosion</div>
+    <div class="controls">
+        <div class="control-item">
+            <label for="particleCount">Particle Count: <span id="countValue">150</span></label>
+            <input type="range" id="particleCount" min="50" max="500" value="150">
+        </div>
+        <div class="control-item">
+            <label for="connectionDist">Connection Distance: <span id="distValue">120</span></label>
+            <input type="range" id="connectionDist" min="50" max="300" value="120">
+        </div>
+        <div class="control-item">
+            <label for="speed">Speed: <span id="speedValue">2</span></label>
+            <input type="range" id="speed" min="1" max="10" value="2">
+        </div>
+        <div class="control-item">
+            <label for="colorMode">Color Mode:</label>
+            <select id="colorMode">
+                <option value="rainbow">Rainbow</option>
+                <option value="pastel">Pastel</option>
+                <option value="fire">Fire</option>
+                <option value="ocean">Ocean</option>
+            </select>
+        </div>
+        <button id="resetBtn">Reset Particles</button>
+    </div>
+
+    <script>
+        // Array to store particles
+        let particles = [];
+        // Particle settings
+        let particleCount = 150;
+        let connectionDistance = 120;
+        let maxSpeed = 2;
+        let colorModeValue = 'rainbow';
+        let hueOffset = 0;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            
+            reset() {
+                this.x = random(width);
+                this.y = random(height);
+                this.size = random(3, 8);
+                this.speedX = random(-maxSpeed, maxSpeed);
+                this.speedY = random(-maxSpeed, maxSpeed);
+                this.color = this.getColor();
+                this.life = 255; // For particles created by explosion
+            }
+            
+            getColor() {
+                if (colorModeValue === 'rainbow') {
+                    return color(
+                        (hueOffset + 360) % 360,
+                        80,
+                        90,
+                        0.8
+                    );
+                } else if (colorModeValue === 'pastel') {
+                    return color(
+                        random(180, 360),
+                        40,
+                        95,
+                        0.7
+                    );
+                } else if (colorModeValue === 'fire') {
+                    return color(
+                        random(0, 40),
+                        80,
+                        90,
+                        0.8
+                    );
+                } else { // ocean
+                    return color(
+                        random(170, 220),
+                        80,
+                        60,
+                        0.8
+                    );
+                }
+            }
+            
+            update() {
+                // Move particle
+                this.x += this.speedX;
+                this.y += this.speedY;
+                
+                // Bounce off edges
+                if (this.x < 0 || this.x > width) this.speedX *= -1;
+                if (this.y < 0 || this.y > height) this.speedY *= -1;
+                
+                // Apply slight randomness to movement
+                this.speedX += random(-0.1, 0.1);
+                this.speedY += random(-0.1, 0.1);
+                
+                // Limit speed
+                const speed = sqrt(this.speedX * this.speedX + this.speedY * this.speedY);
+                if (speed > maxSpeed * 1.5) {
+                    this.speedX = (this.speedX / speed) * maxSpeed * 1.5;
+                    this.speedY = (this.speedY / speed) * maxSpeed * 1.5;
+                }
+                
+                // Fade out if it's an explosion particle
+                if (this.life < 255) {
+                    this.life -= 2;
+                    if (this.life <= 0) {
+                        this.reset();
+                    }
+                }
+            }
+            
+            draw() {
+                // Draw the particle
+                noStroke();
+                if (this.life < 255) {
+                    fill(
+                        red(this.color),
+                        green(this.color),
+                        blue(this.color),
+                        this.life
+                    );
+                } else {
+                    fill(this.color);
+                }
+                ellipse(this.x, this.y, this.size);
+            }
+            
+            // Check distance to another particle
+            distanceTo(other) {
+                return dist(this.x, this.y, other.x, other.y);
+            }
+        }
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            colorMode(HSB, 360, 100, 100, 1);
+            
+            // Create initial particles
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle());
+            }
+            
+            // Set up event listeners for controls
+            document.getElementById('particleCount').addEventListener('input', function() {
+                particleCount = this.value;
+                document.getElementById('countValue').textContent = particleCount;
+                adjustParticleCount();
+            });
+            
+            document.getElementById('connectionDist').addEventListener('input', function() {
+                connectionDistance = this.value;
+                document.getElementById('distValue').textContent = connectionDistance;
+            });
+            
+            document.getElementById('speed').addEventListener('input', function() {
+                maxSpeed = this.value;
+                document.getElementById('speedValue').textContent = maxSpeed;
+            });
+            
+            document.getElementById('colorMode').addEventListener('change', function() {
+                colorMode = this.value;
+                // Update colors for existing particles
+                particles.forEach(p => p.color = p.getColor());
+            });
+            
+            document.getElementById('resetBtn').addEventListener('click', function() {
+                particles = [];
+                for (let i = 0; i < particleCount; i++) {
+                    particles.push(new Particle());
+                }
+            });
+        }
+
+        function draw() {
+            // Create a semi-transparent background for trailing effect
+            background(0, 0, 0, 0.15);
+            
+            // Update hue offset for rainbow effect
+            hueOffset = (hueOffset + 0.5) % 360;
+            
+            // Update and draw particles
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                
+                // Check connections with other particles
+                for (let j = i + 1; j < particles.length; j++) {
+                    const distance = particles[i].distanceTo(particles[j]);
+                    if (distance < connectionDistance) {
+                        // Calculate line opacity based on distance
+                        const alpha = map(distance, 0, connectionDistance, 1, 0.1);
+                        strokeWeight(map(distance, 0, connectionDistance, 2, 0.2));
+                        
+                        // Draw a line between connected particles
+                        if (colorModeValue === 'rainbow') {
+                            stroke((hueOffset + 180) % 360, 60, 90, alpha);
+                        } else {
+                            stroke(
+                                red(particles[i].color),
+                                green(particles[i].color),
+                                blue(particles[i].color),
+                                alpha * 0.7
+                            );
+                        }
+                        line(
+                            particles[i].x, particles[i].y,
+                            particles[j].x, particles[j].y
+                        );
+                    }
+                }
+                
+                // Attract particles to mouse
+                if (mouseIsPressed) {
+                    const mouseDist = dist(particles[i].x, particles[i].y, mouseX, mouseY);
+                    if (mouseDist < 200) {
+                        // Create a repulsion effect when mouse is pressed
+                        const angle = atan2(particles[i].y - mouseY, particles[i].x - mouseX);
+                        const force = map(mouseDist, 0, 200, 5, 0);
+                        particles[i].speedX += cos(angle) * force;
+                        particles[i].speedY += sin(angle) * force;
+                    }
+                } else {
+                    // Normal attraction to mouse
+                    const mouseDist = dist(particles[i].x, particles[i].y, mouseX, mouseY);
+                    if (mouseDist < 150) {
+                        const angle = atan2(mouseY - particles[i].y, mouseX - particles[i].x);
+                        const force = map(mouseDist, 0, 150, 0.3, 0);
+                        particles[i].speedX += cos(angle) * force;
+                        particles[i].speedY += sin(angle) * force;
+                    }
+                }
+            }
+            
+            // Draw a glow effect at mouse position
+            if (!mouseIsPressed) {
+                noStroke();
+                fill(255, 255, 255, 0.1);
+                for (let i = 1; i <= 5; i++) {
+                    ellipse(mouseX, mouseY, i * 30);
+                }
+            }
+        }
+
+        function mouseClicked() {
+            // Create an explosion of particles at mouse position
+            for (let i = 0; i < 50; i++) {
+                const p = new Particle();
+                p.x = mouseX;
+                p.y = mouseY;
+                p.size = random(2, 6);
+                p.speedX = random(-8, 8);
+                p.speedY = random(-8, 8);
+                p.color = p.getColor();
+                p.life = 250; // These particles will fade out
+                particles.push(p);
+            }
+        }
+
+        function adjustParticleCount() {
+            // Add or remove particles to match the new count
+            if (particles.length < particleCount) {
+                for (let i = particles.length; i < particleCount; i++) {
+                    particles.push(new Particle());
+                }
+            } else if (particles.length > particleCount) {
+                particles.splice(particleCount, particles.length - particleCount);
+            }
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+    </script>
+</body>
+</html>

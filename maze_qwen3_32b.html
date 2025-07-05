@@ -1,0 +1,286 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Maze Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .controls label {
+            margin-right: 15px;
+        }
+        .controls input {
+            width: 60px;
+            margin-right: 10px;
+        }
+        .controls button {
+            margin-right: 10px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #007BFF;
+            color: white;
+        }
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+        canvas {
+            border: 1px solid #000;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label>Rows: <input type="number" id="rows" value="10" min="5" max="50"></label>
+        <label>Columns: <input type="number" id="cols" value="10" min="5" max="50"></label>
+        <button id="generate">Generate Maze</button>
+        <button id="solve">Show Solution</button>
+    </div>
+    <canvas id="mazeCanvas" width="600" height="600"></canvas>
+
+    <script>
+        let canvas = document.getElementById('mazeCanvas');
+        let ctx = canvas.getContext('2d');
+        let rows = 10;
+        let cols = 10;
+        let grid = [];
+        let solutionPath = [];
+
+        function createGrid(rows, cols) {
+            let grid = [];
+            for (let row = 0; row < rows; row++) {
+                grid[row] = [];
+                for (let col = 0; col < cols; col++) {
+                    grid[row][col] = {
+                        top: true,
+                        right: true,
+                        bottom: true,
+                        left: true,
+                        visited: false
+                    };
+                }
+            }
+            return grid;
+        }
+
+        function generateMaze() {
+            rows = parseInt(document.getElementById('rows').value);
+            cols = parseInt(document.getElementById('cols').value);
+            grid = createGrid(rows, cols);
+
+            let stack = [];
+            let startRow = 0, startCol = 0;
+            grid[startRow][startCol].visited = true;
+            stack.push({ row: startRow, col: startCol });
+
+            while (stack.length > 0) {
+                let current = stack[stack.length - 1];
+                let currentRow = current.row;
+                let currentCol = current.col;
+
+                let directions = [
+                    { dr: -1, dc: 0 }, // up
+                    { dr: 1, dc: 0 },  // down
+                    { dr: 0, dc: -1 }, // left
+                    { dr: 0, dc: 1 }   // right
+                ];
+                let neighbors = [];
+
+                for (let dir of directions) {
+                    let newRow = currentRow + dir.dr;
+                    let newCol = currentCol + dir.dc;
+                    if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < cols) {
+                        if (!grid[newRow][newCol].visited) {
+                            neighbors.push({ row: newRow, col: newCol });
+                        }
+                    }
+                }
+
+                if (neighbors.length > 0) {
+                    let next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    let dr = next.row - currentRow;
+                    let dc = next.col - currentCol;
+
+                    if (dr === -1) {
+                        grid[currentRow][currentCol].top = false;
+                        grid[next.row][next.col].bottom = false;
+                    } else if (dr === 1) {
+                        grid[currentRow][currentCol].bottom = false;
+                        grid[next.row][next.col].top = false;
+                    } else if (dc === -1) {
+                        grid[currentRow][currentCol].left = false;
+                        grid[next.row][next.col].right = false;
+                    } else if (dc === 1) {
+                        grid[currentRow][currentCol].right = false;
+                        grid[next.row][next.col].left = false;
+                    }
+
+                    stack.push({ row: next.row, col: next.col });
+                    grid[next.row][next.col].visited = true;
+                } else {
+                    stack.pop();
+                }
+            }
+        }
+
+        function drawMaze() {
+            let cellWidth = canvas.width / cols;
+            let cellHeight = canvas.height / rows;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    let x = col * cellWidth;
+                    let y = row * cellHeight;
+
+                    if (grid[row][col].top) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(x + cellWidth, y);
+                        ctx.stroke();
+                    }
+                    if (grid[row][col].right) {
+                        ctx.beginPath();
+                        ctx.moveTo(x + cellWidth, y);
+                        ctx.lineTo(x + cellWidth, y + cellHeight);
+                        ctx.stroke();
+                    }
+                    if (grid[row][col].bottom) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, y + cellHeight);
+                        ctx.lineTo(x + cellWidth, y + cellHeight);
+                        ctx.stroke();
+                    }
+                    if (grid[row][col].left) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(x, y + cellHeight);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function solveMaze() {
+            let startRow = 0, startCol = 0;
+            let endRow = rows - 1, endCol = cols - 1;
+            let visited = new Array(rows).fill(null).map(() => new Array(cols).fill(false));
+            let queue = [{ cell: { row: startRow, col: startCol }, path: [{ row: startRow, col: startCol }] }];
+            visited[startRow][startCol] = true;
+
+            while (queue.length > 0) {
+                let { cell, path } = queue.shift();
+
+                if (cell.row === endRow && cell.col === endCol) {
+                    return path;
+                }
+
+                let directions = [
+                    { dr: -1, dc: 0 }, // up
+                    { dr: 1, dc: 0 },  // down
+                    { dr: 0, dc: -1 }, // left
+                    { dr: 0, dc: 1 }   // right
+                ];
+
+                for (let dir of directions) {
+                    let newRow = cell.row + dir.dr;
+                    let newCol = cell.col + dir.dc;
+
+                    if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < cols && !visited[newRow][newCol]) {
+                        let canMove = false;
+                        if (dir.dr === -1 && !grid[cell.row][cell.col].top) {
+                            canMove = true;
+                        } else if (dir.dr === 1 && !grid[cell.row][cell.col].bottom) {
+                            canMove = true;
+                        } else if (dir.dc === -1 && !grid[cell.row][cell.col].left) {
+                            canMove = true;
+                        } else if (dir.dc === 1 && !grid[cell.row][cell.col].right) {
+                            canMove = true;
+                        }
+
+                        if (canMove) {
+                            visited[newRow][newCol] = true;
+                            queue.push({
+                                cell: { row: newRow, col: newCol },
+                                path: [...path, { row: newRow, col: newCol }]
+                            });
+                        }
+                    }
+                }
+            }
+
+            return [];
+        }
+
+        function drawSolution(path) {
+            let cellWidth = canvas.width / cols;
+            let cellHeight = canvas.height / rows;
+
+            ctx.strokeStyle = '#f00';
+            ctx.lineWidth = 3;
+
+            for (let i = 0; i < path.length - 1; i++) {
+                let current = path[i];
+                let next = path[i + 1];
+                let x1 = (current.col + 0.5) * cellWidth;
+                let y1 = (current.row + 0.5) * cellHeight;
+
+                let x2, y2;
+                if (next.row === current.row - 1) {
+                    y2 = y1 - cellHeight;
+                    x2 = x1;
+                } else if (next.row === current.row + 1) {
+                    y2 = y1 + cellHeight;
+                    x2 = x1;
+                } else if (next.col === current.col - 1) {
+                    x2 = x1 - cellWidth;
+                    y2 = y1;
+                } else {
+                    x2 = x1 + cellWidth;
+                    y2 = y1;
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+
+        document.getElementById('generate').addEventListener('click', () => {
+            generateMaze();
+            solutionPath = solveMaze();
+            drawMaze();
+        });
+
+        document.getElementById('solve').addEventListener('click', () => {
+            if (solutionPath.length > 0) {
+                drawMaze(); // Redraw maze to clear previous solution
+                drawSolution(solutionPath);
+            }
+        });
+
+        // Initial generation
+        window.onload = () => {
+            document.getElementById('generate').click();
+        };
+    </script>
+</body>
+</html>

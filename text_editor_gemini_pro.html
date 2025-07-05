@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Text Editor</title>
+    <style>
+        /* --- 1. General & Reset --- */
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1e1e1e; /* Dark background for the whole page */
+            color: #d4d4d4; /* Light text color */
+        }
+
+        /* --- 2. Main Layout Container --- */
+        #editor-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Full viewport height */
+            background-color: #252526;
+        }
+
+        /* --- 3. Toolbar --- */
+        #toolbar {
+            display: flex;
+            flex-wrap: wrap; /* Allow buttons to wrap on small screens */
+            align-items: center;
+            padding: 8px;
+            background-color: #333333;
+            border-bottom: 1px solid #444444;
+            flex-shrink: 0; /* Prevent toolbar from shrinking */
+        }
+
+        #toolbar button {
+            background-color: #4f4f4f;
+            color: #ffffff;
+            border: 1px solid #666666;
+            padding: 8px 15px;
+            margin: 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s ease;
+        }
+
+        #toolbar button:hover {
+            background-color: #636363;
+        }
+
+        #toolbar button:active {
+            background-color: #3e3e3e;
+        }
+        
+        /* This is hidden, but necessary for the "Load" functionality */
+        #file-input {
+            display: none;
+        }
+
+        /* --- 4. Text Area --- */
+        #editor-area {
+            flex-grow: 1; /* Take up all available vertical space */
+            width: 100%;
+            padding: 15px;
+            border: none;
+            outline: none; /* No ugly focus outline */
+            resize: none; /* Disable manual resizing */
+            
+            background-color: #1e1e1e; /* Editor background */
+            color: #d4d4d4; /* Editor text color */
+            
+            /* The requested fixed-width font */
+            font-family: 'Consolas', 'Menlo', 'Courier New', Courier, monospace;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        /* --- 5. Status Bar --- */
+        #status-bar {
+            display: flex;
+            justify-content: space-around;
+            padding: 8px;
+            background-color: #007acc; /* A contrasting color for the status bar */
+            color: #ffffff;
+            font-size: 12px;
+            flex-shrink: 0; /* Prevent status bar from shrinking */
+            user-select: none; /* Text in status bar is not selectable */
+        }
+
+        .status-item {
+            min-width: 100px;
+            text-align: center;
+        }
+
+        /* --- 6. Mobile Responsiveness --- */
+        @media (max-width: 600px) {
+            #toolbar button {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+
+            #editor-area {
+                padding: 10px;
+                font-size: 14px;
+            }
+
+            #status-bar {
+                font-size: 10px;
+                padding: 6px;
+            }
+
+            .status-item {
+                min-width: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="editor-container">
+        <!-- Toolbar with action buttons -->
+        <div id="toolbar">
+            <button id="btn-new">New</button>
+            <button id="btn-save">Save</button>
+            <button id="btn-load">Load</button>
+            <input type="file" id="file-input" accept=".txt, .md, .js, .html, .css, .xml, .json, .log">
+        </div>
+
+        <!-- The main text editing area -->
+        <textarea id="editor-area" placeholder="Start typing here..."></textarea>
+
+        <!-- Status bar for stats -->
+        <div id="status-bar">
+            <div id="status-chars" class="status-item">Chars: 0</div>
+            <div id="status-words" class="status-item">Words: 0</div>
+            <div id="status-lines" class="status-item">Lines: 1</div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. DOM Element References ---
+        const editorArea = document.getElementById('editor-area');
+        const btnNew = document.getElementById('btn-new');
+        const btnSave = document.getElementById('btn-save');
+        const btnLoad = document.getElementById('btn-load');
+        const fileInput = document.getElementById('file-input');
+        
+        const statusChars = document.getElementById('status-chars');
+        const statusWords = document.getElementById('status-words');
+        const statusLines = document.getElementById('status-lines');
+
+        // --- 2. State Management ---
+        let isDirty = false; // To track unsaved changes
+        let currentFileName = 'document.txt';
+
+        // --- 3. Core Functions ---
+        
+        /**
+         * Clears the editor, asking for confirmation if there are unsaved changes.
+         */
+        function handleNewFile() {
+            if (isDirty && !confirm("You have unsaved changes. Are you sure you want to start a new file?")) {
+                return;
+            }
+            editorArea.value = '';
+            currentFileName = 'document.txt';
+            isDirty = false;
+            updateStatus();
+        }
+
+        /**
+         * Triggers a download of the editor's content as a text file.
+         */
+        function handleSaveFile() {
+            const textToSave = editorArea.value;
+            const blob = new Blob([textToSave], { type: 'text/plain' });
+            
+            // Create a temporary anchor element to trigger the download
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = prompt("Save as:", currentFileName) || currentFileName;
+            
+            // Programmatically click the link and then remove it
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href); // Clean up the blob URL
+
+            isDirty = false;
+        }
+
+        /**
+         * Opens the file-picker dialog to load a file.
+         */
+        function handleLoadFile() {
+            if (isDirty && !confirm("You have unsaved changes. Are you sure you want to load a new file? This will overwrite your current work.")) {
+                return;
+            }
+            fileInput.click(); // Trigger the hidden file input
+        }
+
+        /**
+         * Reads the selected file and populates the editor with its content.
+         * This function is called when the file input's value changes.
+         */
+        function loadFileContent(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return; // User cancelled the dialog
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                editorArea.value = text;
+                currentFileName = file.name;
+                isDirty = false;
+                updateStatus();
+            };
+            
+            reader.onerror = function() {
+                alert('Error reading file: ' + reader.error);
+            };
+            
+            reader.readAsText(file);
+            
+            // Reset the input value so the 'change' event fires even if the same file is selected again
+            fileInput.value = null;
+        }
+
+        /**
+         * Updates the character, word, and line counts in the status bar.
+         */
+        function updateStatus() {
+            const text = editorArea.value;
+            
+            // Character count
+            statusChars.textContent = `Chars: ${text.length}`;
+            
+            // Word count (splits by whitespace and filters out empty strings)
+            const words = text.trim().split(/\s+/).filter(Boolean);
+            statusWords.textContent = `Words: ${words.length === 1 && words[0] === '' ? 0 : words.length}`;
+
+            // Line count
+            const lines = text.split('\n');
+            statusLines.textContent = `Lines: ${lines.length}`;
+        }
+        
+        // --- 4. Event Listeners ---
+
+        // Button Clicks
+        btnNew.addEventListener('click', handleNewFile);
+        btnSave.addEventListener('click', handleSaveFile);
+        btnLoad.addEventListener('click', handleLoadFile);
+        
+        // File Input Change
+        fileInput.addEventListener('change', loadFileContent);
+
+        // Editor Input (for live status updates and tracking changes)
+        editorArea.addEventListener('input', () => {
+            isDirty = true;
+            updateStatus();
+        });
+
+        // Keyboard Shortcuts (Windows standard)
+        window.addEventListener('keydown', (e) => {
+            // Check if Ctrl key (or Command key on Mac) is pressed
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key.toLowerCase()) {
+                    case 's': // Ctrl+S for Save
+                        e.preventDefault(); // Prevent browser's save page dialog
+                        handleSaveFile();
+                        break;
+                    case 'o': // Ctrl+O for Open/Load
+                        e.preventDefault(); // Prevent browser's open file dialog
+                        handleLoadFile();
+                        break;
+                    case 'n': // Ctrl+N for New
+                        e.preventDefault(); // Prevent opening a new window
+                        handleNewFile();
+                        break;
+                }
+            }
+        });
+
+        // Warn user about unsaved changes before leaving the page
+        window.addEventListener('beforeunload', (e) => {
+            if (isDirty) {
+                // This is the standard way to trigger the browser's "unsaved changes" dialog.
+                // Most modern browsers ignore the custom message and show a generic one.
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+        
+        // --- 5. Initial Setup ---
+        // Perform an initial status update when the page loads
+        updateStatus();
+
+    </script>
+</body>
+</html>

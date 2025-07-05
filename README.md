@@ -186,3 +186,15 @@ automatically convert the price from euros into cents (for internal DB storage)
 7. Exit and save results to database.
 
 Include comprehensive error checking. Create indexes for the most widely used listing and search operations (ordered by name and ordered by price).
+
+
+# maze_llm.py
+
+Create JS program to generate random mazes, which have at least one solution. Draw the maze using HTML5 Canvas and include a button to generate a new maze.. Output everything as 1 fully functional HTML5 file.
+
+# text_editor.html
+
+Generate a code for a modern comprehensive text editor, which works in web browser. Use fixed width font. Use standard Windows keyboard short cuts, include ability to save and load text files. Make sure it is responsive and mobile friendly. Show line numbers. Do not use alert or prompt. Include everything 1 HTML5 file.
+
+# p5_animation.html
+Create an amazing animation multicolor and interactive using p5js

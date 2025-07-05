@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maze Generator with Unique Solution</title>
+  <style>
+    body {
+      background: #f4f7fa;
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    .container {
+      background: #fff;
+      margin-top: 40px;
+      padding: 28px 36px 24px 36px;
+      border-radius: 18px;
+      box-shadow: 0 4px 28px rgba(0,0,0,0.14);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 2.0rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #164f7a;
+    }
+    .controls {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .controls label {
+      font-size: 1rem;
+      color: #374151;
+      margin-right: 4px;
+    }
+    .controls input[type=number] {
+      width: 62px;
+      font-size: 1rem;
+      padding: 3px 7px;
+      border-radius: 6px;
+      border: 1px solid #bfc8da;
+      background: #f7fafc;
+      color: #293040;
+      margin-right: 10px;
+      margin-left: 3px;
+    }
+    .controls input[type=number]:focus {
+      border-color: #184872;
+      outline: none;
+    }
+    button {
+      font-size: 1.07em;
+      padding: 7px 22px;
+      border: none;
+      border-radius: 8px;
+      background: #184872;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.10);
+      transition: background 0.18s;
+    }
+    button:active {
+      background: #163d5a;
+    }
+    button:disabled {
+      background: #a5b6c7;
+      cursor: not-allowed;
+    }
+    canvas {
+      border: 2.5px solid #184872;
+      background: #f8fafc;
+      box-shadow: 0 1px 16px rgba(20,48,80,0.13);
+      border-radius: 10px;
+      margin-top: 12px;
+    }
+    @media (max-width: 650px) {
+      .container { padding: 10px 4px; }
+      h1 { font-size: 1.3rem; }
+      .controls { flex-direction: column; gap: 10px; }
+      canvas { width: 100% !important; height: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Maze Generator &amp; Solver</h1>
+    <div class="controls">
+      <label for="width">Width:</label>
+      <input type="number" id="width" min="5" max="50" value="16" />
+      <label for="height">Height:</label>
+      <input type="number" id="height" min="5" max="50" value="16" />
+      <label for="cell">Cell(px):</label>
+      <input type="number" id="cell" min="10" max="50" value="28" />
+      <button id="generateBtn">Generate New Maze</button>
+      <button id="solveBtn">Show Solution</button>
+    </div>
+    <canvas id="mazeCanvas"></canvas>
+  </div>
+  <script>
+    // Maze constants & variables
+    let mazeWidth = 16, mazeHeight = 16, cellSize = 28;
+    let maze = [], solutionPath = null;
+    const WALL = [0, 1, 2, 3]; // Up, Right, Down, Left
+    const DIRS = [
+      {dx:0, dy:-1, wall:0, opp:2}, // Up
+      {dx:1, dy:0, wall:1, opp:3}, // Right
+      {dx:0, dy:1, wall:2, opp:0}, // Down
+      {dx:-1,dy:0, wall:3, opp:1}, // Left
+    ];
+
+    class Cell {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.walls = [true, true, true, true];
+        this.visited = false;
+      }
+    }
+
+    function generateMazeGrid(width, height) {
+      // Create grid
+      const grid = Array.from({length: height}, (_, y) => (
+        Array.from({length: width}, (_, x) => new Cell(x, y))
+      ));
+      // Carve maze (recursive backtracker), ensures one solution (perfect maze)
+      function carve(x, y) {
+        grid[y][x].visited = true;
+        let dirs = DIRS.slice();
+        for (let i = dirs.length - 1; i > 0; i--) {
+          let j = Math.floor(Math.random() * (i + 1));
+          [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+        }
+        for (let {dx, dy, wall, opp} of dirs) {
+          let nx = x + dx, ny = y + dy;
+          if (
+            nx >= 0 && nx < width &&
+            ny >= 0 && ny < height &&
+            !grid[ny][nx].visited
+          ) {
+            grid[y][x].walls[wall] = false;
+            grid[ny][nx].walls[opp] = false;
+            carve(nx, ny);
+          }
+        }
+      }
+      carve(0, 0); // Always start at top-left
+      // Reset visited for future use (solving)
+      for (let row of grid) for (let cell of row) cell.visited = false;
+      return grid;
+    }
+
+    // Solves maze using DFS, returns solution path as array of [x,y]
+    function solveMaze(maze) {
+      let width = maze[0].length, height = maze.length;
+      let stack = [[0,0]], visited = Array.from({length: height}, () => Array(width).fill(false));
+      let parent = Array.from({length: height}, () => Array(width));
+      visited[0][0] = true;
+      while (stack.length) {
+        let [x, y] = stack.pop();
+        if (x === width-1 && y === height-1) break;
+        for (let d=0; d<4; d++) {
+          let nx = x + DIRS[d].dx, ny = y + DIRS[d].dy;
+          if (
+            nx >= 0 && nx < width &&
+            ny >= 0 && ny < height &&
+            !visited[ny][nx] &&
+            !maze[y][x].walls[d]
+          ) {
+            stack.push([nx, ny]);
+            visited[ny][nx] = true;
+            parent[ny][nx] = [x, y];
+          }
+        }
+      }
+      // Reconstruct path
+      let path = [], cx = width-1, cy = height-1;
+      while (!(cx===0 && cy===0)) {
+        path.push([cx, cy]);
+        [cx, cy] = parent[cy][cx];
+      }
+      path.push([0, 0]);
+      path.reverse();
+      return path;
+    }
+
+    // Draw maze
+    function drawMaze(maze, ctx, cell, showSolution = false, solutionPath = null) {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#1a274b';
+      let width = maze[0].length, height = maze.length;
+      // Draw walls
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          let c = maze[y][x];
+          let px = x * cell, py = y * cell;
+          // Top
+          if (c.walls[0]) {
+            ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + cell, py); ctx.stroke();
+          }
+          // Right
+          if (c.walls[1]) {
+            ctx.beginPath(); ctx.moveTo(px + cell, py); ctx.lineTo(px + cell, py + cell); ctx.stroke();
+          }
+          // Bottom
+          if (c.walls[2]) {
+            ctx.beginPath(); ctx.moveTo(px + cell, py + cell); ctx.lineTo(px, py + cell); ctx.stroke();
+          }
+          // Left
+          if (c.walls[3]) {
+            ctx.beginPath(); ctx.moveTo(px, py + cell); ctx.lineTo(px, py); ctx.stroke();
+          }
+        }
+      }
+      // Draw start/end cells
+      ctx.fillStyle = '#36e06f';
+      ctx.fillRect(3,3, cell-6, cell-6); // Start
+      ctx.fillStyle = '#e34343';
+      ctx.fillRect(3 + (width-1)*cell, 3 + (height-1)*cell, cell-6, cell-6); // End
+      // Solution path
+      if (showSolution && solutionPath && solutionPath.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = '#2056d7';
+        ctx.lineWidth = cell/4 > 8 ? 8 : cell/4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (let i = 0; i < solutionPath.length; i++) {
+          let [x, y] = solutionPath[i];
+          let cx = x * cell + cell/2, cy = y * cell + cell/2;
+          if (i === 0) ctx.moveTo(cx, cy);
+          else ctx.lineTo(cx, cy);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Responsive canvas size
+    function resizeCanvas(width, height, cell, canvas) {
+      canvas.width = width * cell + 2;
+      canvas.height = height * cell + 2;
+      canvas.style.width = (width * cell + 2) + 'px';
+      canvas.style.height = (height * cell + 2) + 'px';
+    }
+
+    // Setup and event handlers
+    const canvas = document.getElementById('mazeCanvas');
+    const ctx = canvas.getContext('2d');
+    const widthInput = document.getElementById('width');
+    const heightInput = document.getElementById('height');
+    const cellInput = document.getElementById('cell');
+    const generateBtn = document.getElementById('generateBtn');
+    const solveBtn = document.getElementById('solveBtn');
+
+    function updateSettings() {
+      let w = parseInt(widthInput.value, 10);
+      let h = parseInt(heightInput.value, 10);
+      let c = parseInt(cellInput.value, 10);
+      if (
+        Number.isNaN(w) || w < 5 || w > 50 ||
+        Number.isNaN(h) || h < 5 || h > 50 ||
+        Number.isNaN(c) || c < 10 || c > 50
+      ) {
+        alert('Invalid maze size. Allowed: Width/Height 5-50, Cell 10-50');
+        return false;
+      }
+      mazeWidth = w;
+      mazeHeight = h;
+      cellSize = c;
+      return true;
+    }
+
+    function generateNewMaze() {
+      if (!updateSettings()) return;
+      maze = generateMazeGrid(mazeWidth, mazeHeight);
+      solutionPath = null;
+      resizeCanvas(mazeWidth, mazeHeight, cellSize, canvas);
+      drawMaze(maze, ctx, cellSize);
+      solveBtn.disabled = false;
+    }
+
+    function showSolution() {
+      if (!solutionPath) {
+        solutionPath = solveMaze(maze);
+      }
+      drawMaze(maze, ctx, cellSize, true, solutionPath);
+      solveBtn.disabled = true;
+    }
+
+    generateBtn.addEventListener('click', generateNewMaze);
+    solveBtn.addEventListener('click', showSolution);
+    widthInput.addEventListener('change', generateNewMaze);
+    heightInput.addEventListener('change', generateNewMaze);
+    cellInput.addEventListener('change', generateNewMaze);
+
+    // Initial maze
+    generateNewMaze();
+  </script>
+</body>
+</html>

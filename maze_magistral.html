@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        canvas {
+            border: 1px solid black;
+        }
+        button, input {
+            padding: 8px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Maze Generator</h1>
+    <div class="controls">
+        <label for="width">Width:</label>
+        <input type="number" id="width" value="20">
+        <label for="height">Height:</label>
+        <input type="number" id="height" value="20">
+        <label for="cellSize">Cell Size:</label>
+        <input type="number" id="cellSize" value="20">
+        <button id="generateMaze">Generate Maze</button>
+        <button id="showSolution">Show Solution</button>
+    </div>
+    <canvas id="mazeCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        const generateMazeBtn = document.getElementById('generateMaze');
+        const showSolutionBtn = document.getElementById('showSolution');
+
+        let maze = [];
+        let width = 20;
+        let height = 20;
+        let cellSize = 20;
+        let solutionPath = [];
+
+        function initializeMaze() {
+            maze = Array(height).fill().map(() => Array(width).fill(1)); // 1 represents wall
+        }
+
+        function generateMaze() {
+            initializeMaze();
+
+            // Define starting point and carve out the maze using DFS
+            let stack = [];
+            let visited = Array(height).fill().map(() => Array(width).fill(false));
+
+            // Start from a random cell for more interesting mazes
+            let startX = Math.floor(Math.random() * height);
+            let startY = Math.floor(Math.random() * width);
+            stack.push([startX, startY]);
+            visited[startX][startY] = true;
+            maze[startX][startY] = 0; // Mark as path
+
+            const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+
+            while (stack.length > 0) {
+                let [x, y] = stack[stack.length - 1];
+                let neighbors = [];
+
+                // Find unvisited neighbors
+                directions.forEach(([dx, dy]) => {
+                    let nx = x + dx * 2; // Step by 2 to carve out a path and avoid crossing walls
+                    let ny = y + dy * 2;
+                    if (nx >= 0 && nx < height && ny >= 0 && ny < width && !visited[nx][ny]) {
+                        neighbors.push([nx, ny]);
+                    }
+                });
+
+                if (neighbors.length > 0) {
+                    // Choose a random neighbor
+                    let [nx, ny] = neighbors[Math.floor(Math.random() * neighbors.length)];
+
+                    // Remove the wall between current cell and chosen neighbor
+                    maze[(x + nx) / 2][(y + ny) / 2] = 0;
+                    visited[nx][ny] = true;
+                    maze[nx][ny] = 0;
+                    stack.push([nx, ny]);
+                } else {
+                    stack.pop(); // Backtrack
+                }
+            }
+
+            // Ensure start and end points are open
+            maze[0][0] = 0;
+            maze[height-1][width-1] = 0;
+        }
+
+        function drawMaze() {
+            canvas.width = width * cellSize;
+            canvas.height = height * cellSize;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw the maze
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    if (maze[i][j] === 1) {
+                        ctx.fillStyle = 'black'; // Wall
+                        ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                    } else {
+                        ctx.fillStyle = 'white'; // Path
+                        ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                        ctx.strokeStyle = 'black';
+                        ctx.strokeRect(j * cellSize, i * cellSize, cellSize, cellSize);
+                    }
+                }
+            }
+
+            // Mark start and end points
+            ctx.fillStyle = 'green';
+            ctx.fillRect(0, 0, cellSize, cellSize);
+
+            ctx.fillStyle = 'red';
+            ctx.fillRect((width - 1) * cellSize, (height - 1) * cellSize, cellSize, cellSize);
+        }
+
+        function findSolution() {
+            // BFS to find a path from start to end
+            let queue = [[0, 0]];
+            let visited = Array(height).fill().map(() => Array(width).fill(false));
+            let parent = Array(height).fill().map(() => Array(width).fill(null));
+
+            visited[0][0] = true;
+            let found = false;
+
+            const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+            while (queue.length > 0 && !found) {
+                let [x, y] = queue.shift();
+
+                if (x === height - 1 && y === width - 1) {
+                    found = true;
+                    break;
+                }
+
+                directions.forEach(([dx, dy]) => {
+                    let nx = x + dx;
+                    let ny = y + dy;
+                    if (nx >= 0 && nx < height && ny >= 0 && ny < width && maze[nx][ny] === 0 && !visited[nx][ny]) {
+                        visited[nx][ny] = true;
+                        parent[nx][ny] = [x, y];
+                        queue.push([nx, ny]);
+                    }
+                });
+            }
+
+            // Reconstruct the path
+            solutionPath = [];
+            if (found) {
+                let current = [height - 1, width - 1];
+                while (current !== null) {
+                    solutionPath.push(current);
+                    let [x, y] = current;
+                    current = parent[x][y];
+                }
+                solutionPath.reverse(); // Path from start to end
+            }
+        }
+
+        function drawSolution() {
+            if (solutionPath.length === 0) {
+                findSolution();
+            }
+            ctx.fillStyle = 'blue';
+            for (let [x, y] of solutionPath) {
+                ctx.fillRect(y * cellSize, x * cellSize, cellSize, cellSize);
+            }
+        }
+
+        generateMazeBtn.addEventListener('click', () => {
+            width = parseInt(document.getElementById('width').value) || 20;
+            height = parseInt(document.getElementById('height').value) || 20;
+            cellSize = parseInt(document.getElementById('cellSize').value) || 20;
+            generateMaze();
+            drawMaze();
+            solutionPath = [];
+        });
+
+        showSolutionBtn.addEventListener('click', drawSolution);
+
+        // Initialize
+        generateMaze();
+        drawMaze();
+    </script>
+</body>
+</html>

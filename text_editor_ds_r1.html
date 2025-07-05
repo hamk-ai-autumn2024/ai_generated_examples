@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Web Text Editor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            background: rgba(25, 25, 35, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(90deg, #2c3e50, #1a2a6c);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #4a5568;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo i {
+            font-size: 24px;
+            color: #4fc3f7;
+        }
+        
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(45deg, #64b5f6, #4fc3f7, #29b6f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 8px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(135deg, #2980b9, #3498db);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn i {
+            font-size: 16px;
+        }
+        
+        .btn.save {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+        }
+        
+        .btn.save:hover {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+        
+        .btn.open {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        }
+        
+        .btn.open:hover {
+            background: linear-gradient(135deg, #8e44ad, #9b59b6);
+        }
+        
+        .status-bar {
+            background: #2c3e50;
+            padding: 8px 20px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: #b0bec5;
+            border-top: 1px solid #4a5568;
+        }
+        
+        .editor-wrapper {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .line-numbers {
+            width: 60px;
+            background-color: #252836;
+            color: #7e8a98;
+            text-align: right;
+            padding: 10px 15px 10px 10px;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 16px;
+            line-height: 1.5;
+            overflow-y: hidden;
+            border-right: 1px solid #4a5568;
+            user-select: none;
+        }
+        
+        .editor {
+            flex: 1;
+            padding: 10px 15px;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 16px;
+            line-height: 1.5;
+            background-color: #1e1f29;
+            color: #e0e0e0;
+            border: none;
+            resize: none;
+            outline: none;
+            overflow-y: scroll;
+            white-space: pre;
+            tab-size: 4;
+        }
+        
+        .editor:focus {
+            box-shadow: inset 0 0 0 2px rgba(52, 152, 219, 0.3);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background: #2d3748;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h2 {
+            color: #64b5f6;
+            font-size: 1.5rem;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: #a0aec0;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #cbd5e0;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #4a5568;
+            background: #1a202c;
+            color: #e2e8f0;
+            font-size: 16px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .keyboard-shortcuts {
+            margin-top: 25px;
+            background: rgba(41, 45, 62, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 1200px;
+        }
+        
+        .keyboard-shortcuts h2 {
+            margin-bottom: 15px;
+            color: #64b5f6;
+            font-size: 1.3rem;
+        }
+        
+        .shortcut-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .shortcut-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: rgba(30, 31, 41, 0.8);
+            border-radius: 6px;
+        }
+        
+        .key {
+            background: #2d3748;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #4fc3f7;
+            border: 1px solid #4a5568;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                height: 80vh;
+            }
+            
+            header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .controls {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .btn span {
+                display: none;
+            }
+            
+            .btn i {
+                font-size: 18px;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                align-items: center;
+                gap: 5px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .btn {
+                padding: 10px;
+            }
+            
+            .keyboard-shortcuts {
+                display: none;
+            }
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-code"></i>
+                <h1>Modern Text Editor</h1>
+            </div>
+            <div class="controls">
+                <button class="btn new" id="newBtn">
+                    <i class="fas fa-file"></i>
+                    <span>New</span>
+                </button>
+                <button class="btn open" id="openBtn">
+                    <i class="fas fa-folder-open"></i>
+                    <span>Open</span>
+                </button>
+                <button class="btn save" id="saveBtn">
+                    <i class="fas fa-save"></i>
+                    <span>Save</span>
+                </button>
+            </div>
+        </header>
+        
+        <div class="editor-wrapper">
+            <div class="line-numbers" id="lineNumbers">1</div>
+            <textarea class="editor" id="editor" spellcheck="false"></textarea>
+        </div>
+        
+        <div class="status-bar">
+            <div>Lines: <span id="lineCount">1</span> | Words: <span id="wordCount">0</span> | Characters: <span id="charCount">0</span></div>
+            <div>UTF-8</div>
+        </div>
+    </div>
+    
+    <div class="keyboard-shortcuts">
+        <h2><i class="fas fa-keyboard"></i> Keyboard Shortcuts</h2>
+        <div class="shortcut-grid">
+            <div class="shortcut-item">
+                <span>New File</span>
+                <span class="key">Ctrl + N</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Open File</span>
+                <span class="key">Ctrl + O</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Save File</span>
+                <span class="key">Ctrl + S</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Select All</span>
+                <span class="key">Ctrl + A</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Copy</span>
+                <span class="key">Ctrl + C</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Paste</span>
+                <span class="key">Ctrl + V</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Cut</span>
+                <span class="key">Ctrl + X</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Undo</span>
+                <span class="key">Ctrl + Z</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Redo</span>
+                <span class="key">Ctrl + Y</span>
+            </div>
+            <div class="shortcut-item">
+                <span>Find</span>
+                <span class="key">Ctrl + F</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden file input for opening files -->
+    <input type="file" id="fileInput" accept=".txt" style="display: none;">
+    
+    <script>
+        // DOM elements
+        const editor = document.getElementById('editor');
+        const lineNumbers = document.getElementById('lineNumbers');
+        const newBtn = document.getElementById('newBtn');
+        const openBtn = document.getElementById('openBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const fileInput = document.getElementById('fileInput');
+        const lineCountEl = document.getElementById('lineCount');
+        const wordCountEl = document.getElementById('wordCount');
+        const charCountEl = document.getElementById('charCount');
+        
+        // Initial content with syntax highlighting example
+        const initialContent = `// Welcome to Modern Text Editor
+function helloWorld() {
+    // This is a sample function
+    console.log("Hello, world!");
+    return "Welcome to the editor!";
+}
+
+/* 
+ * Features:
+ * - Line numbers
+ * - Windows keyboard shortcuts
+ * - Save/Load files
+ * - Responsive design
+ * - Mobile friendly
+ * - Status bar with stats
+ */
+
+// Try these shortcuts:
+// Ctrl+N - New file
+// Ctrl+O - Open file
+// Ctrl+S - Save file
+// Ctrl+Z - Undo
+// Ctrl+Y - Redo
+// Ctrl+A - Select all
+// Ctrl+F - Find text`;
+
+        // Set initial content
+        editor.value = initialContent;
+        
+        // Update counters and line numbers initially
+        updateCounters();
+        updateLineNumbers();
+        
+        // Event listeners
+        editor.addEventListener('input', () => {
+            updateCounters();
+            updateLineNumbers();
+        });
+        
+        editor.addEventListener('scroll', () => {
+            lineNumbers.scrollTop = editor.scrollTop;
+        });
+        
+        editor.addEventListener('keydown', (e) => {
+            // Handle Windows keyboard shortcuts
+            if (e.ctrlKey) {
+                switch (e.key.toLowerCase()) {
+                    case 's':
+                        e.preventDefault();
+                        saveFile();
+                        break;
+                    case 'o':
+                        e.preventDefault();
+                        openFile();
+                        break;
+                    case 'n':
+                        e.preventDefault();
+                        newFile();
+                        break;
+                    case 'a':
+                        e.preventDefault();
+                        editor.select();
+                        break;
+                }
+            }
+        });
+        
+        newBtn.addEventListener('click', newFile);
+        openBtn.addEventListener('click', openFile);
+        saveBtn.addEventListener('click', saveFile);
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                editor.value = event.target.result;
+                updateCounters();
+                updateLineNumbers();
+            };
+            reader.readAsText(file);
+        });
+        
+        // Functions
+        function updateLineNumbers() {
+            const lines = editor.value.split('\n').length;
+            let numbers = '';
+            
+            for (let i = 1; i <= lines; i++) {
+                numbers += i + '<br>';
+            }
+            
+            lineNumbers.innerHTML = numbers;
+            lineCountEl.textContent = lines;
+        }
+        
+        function updateCounters() {
+            const text = editor.value;
+            const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+            const chars = text.length;
+            
+            wordCountEl.textContent = words;
+            charCountEl.textContent = chars;
+        }
+        
+        function newFile() {
+            editor.value = '';
+            updateCounters();
+            updateLineNumbers();
+        }
+        
+        function openFile() {
+            fileInput.click();
+        }
+        
+        function saveFile() {
+            const text = editor.value;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'document.txt';
+            document.body.appendChild(a);
+            a.click();
+            
+            // Clean up
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+        }
+    </script>
+</body>
+</html>

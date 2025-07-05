@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Space Shooter</title>
+    <style>
+        /* Add some basic styling to our game */
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        // Get the canvas element
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set the canvas dimensions
+        canvas.width = 800;
+        canvas.height = 600;
+
+        // Define some game constants
+        const SHIP_SIZE = 50;
+        const MISSILE_SIZE = 10;
+        const ENEMY_SIZE = 30;
+        const BOSS_SIZE = 100;
+        const ITEM_SIZE = 20;
+        const SHIP_SPEED = 5;
+        const MISSILE_SPEED = 10;
+        const ENEMY_SPEED = 2;
+        const BOSS_SPEED = 1;
+        const ITEM_SPEED = 1;
+
+        // Define some game variables
+        let shipX = canvas.width / 2;
+        let shipY = canvas.height - SHIP_SIZE * 2;
+        let shipHealth = 10;
+        let shipSpeedBoost = false;
+        let shipSpeedBoostTimeout = 0;
+        let score = 0;
+
+        // Define the missile array
+        let missiles = [];
+
+        // Define the enemy array
+        let enemies = [];
+
+        // Define the item array
+        let items = [];
+
+        // Define the boss
+        let boss = null;
+        let bossHealth = 0;
+
+        // Game over flag
+        let gameOver = false;
+
+        // Main game loop
+        function update() {
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw the ship
+            if (!gameOver) {
+                drawShip();
+                updateShip();
+            }
+
+            // Update and draw missiles
+            updateMissiles();
+            drawMissiles();
+
+            // Update and draw enemies
+            updateEnemies();
+            drawEnemies();
+
+            // Update and draw items
+            updateItems();
+            drawItems();
+
+            // Update and draw boss
+            if (boss) {
+                updateBoss();
+                drawBoss();
+            }
+
+            // Check for collisions
+            checkCollisions();
+
+            // Check for game over
+            if (shipHealth <= 0 && !gameOver) {
+                gameOver = true;
+            }
+
+            // Draw game over text
+            if (gameOver) {
+                ctx.font = '48px Arial';
+                ctx.fillStyle = 'red';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
+                ctx.font = '24px Arial';
+                ctx.fillStyle = 'black';
+                ctx.fillText('Press R to restart', canvas.width / 2, canvas.height / 2 + 50);
+            }
+
+            // Draw win text
+            if (boss && bossHealth <= 0) {
+                ctx.font = '48px Arial';
+                ctx.fillStyle = 'green';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('You Win', canvas.width / 2, canvas.height / 2);
+                ctx.font = '24px Arial';
+                ctx.fillStyle = 'black';
+                ctx.fillText('Press R to restart', canvas.width / 2, canvas.height / 2 + 50);
+                gameOver = true;
+            }
+
+            // Draw score
+            ctx.font = '24px Arial';
+            ctx.fillStyle = 'black';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`Score: ${score}`, 10, 10);
+
+            // Draw health
+            ctx.font = '24px Arial';
+            ctx.fillStyle = 'black';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`Health: ${shipHealth}`, 10, 40);
+
+            // Request the next frame
+            requestAnimationFrame(update);
+        }
+
+        // Handle key presses
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ') {
+                // Shoot a missile
+                missiles.push({ x: shipX, y: shipY });
+            } else if (e.key === 'r' || e.key === 'R') {
+                // Restart the game
+                restartGame();
+            }
+        });
+
+        // Handle key presses for movement
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                shipX -= getShipSpeed();
+            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                shipX += getShipSpeed();
+            }
+
+            // Ensure the ship stays within the screen
+            shipX = Math.max(SHIP_SIZE, Math.min(shipX, canvas.width - SHIP_SIZE));
+        });
+
+        // Draw the ship
+        function drawShip() {
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(shipX - SHIP_SIZE / 2, shipY - SHIP_SIZE / 2, SHIP_SIZE, SHIP_SIZE);
+        }
+
+        // Update the ship
+        function updateShip() {
+            if (shipSpeedBoost && Date.now() > shipSpeedBoostTimeout) {
+                shipSpeedBoost = false;
+            }
+        }
+
+        // Get the ship speed
+        function getShipSpeed() {
+            return shipSpeedBoost ? SHIP_SPEED * 1.5 : SHIP_SPEED;
+        }
+
+        // Update missiles
+        function updateMissiles() {
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                missiles[i].y -= MISSILE_SPEED;
+                if (missiles[i].y < 0) {
+                    missiles.splice(i, 1);
+                }
+            }
+        }
+
+        // Draw missiles
+        function drawMissiles() {
+            ctx.fillStyle = 'white';
+            for (let i = 0; i < missiles.length; i++) {
+                ctx.fillRect(missiles[i].x - MISSILE_SIZE / 2, missiles[i].y - MISSILE_SIZE / 2, MISSILE_SIZE, MISSILE_SIZE);
+            }
+        }
+
+        // Update enemies
+        function updateEnemies() {
+            if (Math.random() < 0.05 && enemies.length < 10 && !boss) {
+                enemies.push({ x: Math.random() * (canvas.width - ENEMY_SIZE), y: 0 });
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].y += ENEMY_SPEED;
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+                    shipHealth--;
+                }
+            }
+
+            // Check if it's time to spawn the boss
+            if (score >= 100 && !boss) {
+                boss = { x: canvas.width / 2, y: 0 };
+                bossHealth = 50;
+            }
+        }
+
+        // Draw enemies
+        function drawEnemies() {
+            ctx.fillStyle = 'red';
+            for (let i = 0; i < enemies.length; i++) {
+                ctx.fillRect(enemies[i].x - ENEMY_SIZE / 2, enemies[i].y - ENEMY_SIZE / 2, ENEMY_SIZE, ENEMY_SIZE);
+            }
+        }
+
+        // Update boss
+        function updateBoss() {
+            if (boss) {
+                boss.y += BOSS_SPEED;
+                if (boss.y > canvas.height) {
+                    boss.y = 0;
+                    boss.x = Math.random() * (canvas.width - BOSS_SIZE);
+                }
+            }
+        }
+
+        // Draw boss
+        function drawBoss() {
+            if (boss) {
+                ctx.fillStyle = 'purple';
+                ctx.fillRect(boss.x - BOSS_SIZE / 2, boss.y - BOSS_SIZE / 2, BOSS_SIZE, BOSS_SIZE);
+            }
+        }
+
+        // Update items
+        function updateItems() {
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].y += ITEM_SPEED;
+                if (items[i].y > canvas.height) {
+                    items.splice(i, 1);
+                }
+            }
+        }
+
+        // Draw items
+        function drawItems() {
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type === 'H') {
+                    ctx.fillStyle = 'red';
+                    ctx.beginPath();
+                    ctx.moveTo(items[i].x, items[i].y - ITEM_SIZE / 2);
+                    ctx.lineTo(items[i].x - ITEM_SIZE / 2, items[i].y + ITEM_SIZE / 2);
+                    ctx.lineTo(items[i].x + ITEM_SIZE / 2, items[i].y + ITEM_SIZE / 2);
+                    ctx.fill();
+                } else if (items[i].type === 'S') {
+                    ctx.fillStyle = 'green';
+                    ctx.fillRect(items[i].x - ITEM_SIZE / 2, items[i].y - ITEM_SIZE / 2, ITEM_SIZE, ITEM_SIZE);
+                }
+            }
+        }
+
+        // Check for collisions
+        function checkCollisions() {
+            // Check for missile-enemy collisions
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    if (checkCollision(missiles[i], enemies[j], MISSILE_SIZE, ENEMY_SIZE)) {
+                        missiles.splice(i, 1);
+                        enemies.splice(j, 1);
+                        score++;
+                        if (Math.random() < 0.2) {
+                            items.push({ x: enemies[j].x, y: enemies[j].y, type: Math.random() < 0.5 ? 'H' : 'S' });
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Check for missile-boss collisions
+            if (boss) {
+                for (let i = missiles.length - 1; i >= 0; i--) {
+                    if (checkCollision(missiles[i], boss, MISSILE_SIZE, BOSS_SIZE)) {
+                        missiles.splice(i, 1);
+                        bossHealth--;
+                        score++;
+                        break;
+                    }
+                }
+            }
+
+            // Check for enemy-ship collisions
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (checkCollision(enemies[i], { x: shipX, y: shipY }, ENEMY_SIZE, SHIP_SIZE)) {
+                    enemies.splice(i, 1);
+                    shipHealth--;
+                }
+            }
+
+            // Check for boss-ship collisions
+            if (boss && checkCollision(boss, { x: shipX, y: shipY }, BOSS_SIZE, SHIP_SIZE)) {
+                boss.y = 0;
+                boss.x = Math.random() * (canvas.width - BOSS_SIZE);
+                shipHealth--;
+            }
+
+            // Check for item-ship collisions
+            for (let i = items.length - 1; i >= 0; i--) {
+                if (checkCollision(items[i], { x: shipX, y: shipY }, ITEM_SIZE, SHIP_SIZE)) {
+                    if (items[i].type === 'H') {
+                        shipHealth += 3;
+                    } else if (items[i].type === 'S') {
+                        shipSpeedBoost = true;
+                        shipSpeedBoostTimeout = Date.now() + 10000;
+                    }
+                    items.splice(i, 1);
+                }
+            }
+        }
+
+        // Check for collision between two objects
+        function checkCollision(obj1, obj2, size1, size2) {
+            return Math.abs(obj1.x - obj2.x) < (size1 + size2) / 2 && Math.abs(obj1.y - obj2.y) < (size1 + size2) / 2;
+        }
+
+        // Restart the game
+        function restartGame() {
+            shipX = canvas.width / 2;
+            shipY = canvas.height - SHIP_SIZE * 2;
+            shipHealth = 10;
+            shipSpeedBoost = false;
+            shipSpeedBoostTimeout = 0;
+            score = 0;
+            missiles = [];
+            enemies = [];
+            items = [];
+            boss = null;
+            bossHealth = 0;
+            gameOver = false;
+        }
+
+        // Start the game loop
+        update();
+    </script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML5 Maze Generator</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            background-color: #f0f0f0;
+        }
+        canvas {
+            border: 2px solid #333;
+            background-color: #fff;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .controls label {
+            font-size: 14px;
+        }
+        .controls input[type="number"] {
+            width: 50px;
+            padding: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <label for="mazeSize">Maze Size (cells):</label>
+        <input type="number" id="mazeSizeInput" value="20" min="5" max="50">
+        <label for="cellSize">Cell Size (px):</label>
+        <input type="number" id="cellSizeInput" value="20" min="5" max="40">
+    </div>
+
+    <canvas id="mazeCanvas"></canvas>
+    <button id="generateButton">Generate New Maze</button>
+
+    <script>
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        const generateButton = document.getElementById('generateButton');
+        const mazeSizeInput = document.getElementById('mazeSizeInput');
+        const cellSizeInput = document.getElementById('cellSizeInput');
+
+        let cols, rows;
+        let cellSize;
+        let grid;
+        let stack;
+
+        // --- Cell Class ---
+        class Cell {
+            constructor(i, j) {
+                this.i = i; // Column index
+                this.j = j; // Row index
+                // Walls: [top, right, bottom, left]
+                this.walls = [true, true, true, true];
+                this.visited = false;
+            }
+
+            // Check neighbors: returns a random unvisited neighbor or undefined
+            checkNeighbors() {
+                let neighbors = [];
+
+                // Top neighbor
+                if (this.j > 0 && !grid[this.i][this.j - 1].visited) {
+                    neighbors.push(grid[this.i][this.j - 1]);
+                }
+                // Right neighbor
+                if (this.i < cols - 1 && !grid[this.i + 1][this.j].visited) {
+                    neighbors.push(grid[this.i + 1][this.j]);
+                }
+                // Bottom neighbor
+                if (this.j < rows - 1 && !grid[this.i][this.j + 1].visited) {
+                    neighbors.push(grid[this.i][this.j + 1]);
+                }
+                // Left neighbor
+                if (this.i > 0 && !grid[this.i - 1][this.j].visited) {
+                    neighbors.push(grid[this.i - 1][this.j]);
+                }
+
+                if (neighbors.length > 0) {
+                    let r = Math.floor(Math.random() * neighbors.length);
+                    return neighbors[r];
+                } else {
+                    return undefined;
+                }
+            }
+
+            // Draw the cell's walls
+            show() {
+                let x = this.i * cellSize;
+                let y = this.j * cellSize;
+
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2; // Make walls a bit thicker
+
+                // Top wall
+                if (this.walls[0]) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + cellSize, y);
+                    ctx.stroke();
+                }
+                // Right wall
+                if (this.walls[1]) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + cellSize, y);
+                    ctx.lineTo(x + cellSize, y + cellSize);
+                    ctx.stroke();
+                }
+                // Bottom wall
+                if (this.walls[2]) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + cellSize, y + cellSize);
+                    ctx.lineTo(x, y + cellSize);
+                    ctx.stroke();
+                }
+                // Left wall
+                if (this.walls[3]) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, y + cellSize);
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                }
+
+                // If visited, fill with a light color (optional, for debugging/visual)
+                // if (this.visited) {
+                //     ctx.fillStyle = 'rgba(200, 200, 255, 0.3)';
+                //     ctx.fillRect(x, y, cellSize, cellSize);
+                // }
+            }
+        }
+
+        // --- Helper: Remove walls between two cells ---
+        function removeWalls(a, b) {
+            let x = a.i - b.i;
+            if (x === 1) { // a is to the right of b
+                a.walls[3] = false; // Remove a's left wall
+                b.walls[1] = false; // Remove b's right wall
+            } else if (x === -1) { // a is to the left of b
+                a.walls[1] = false; // Remove a's right wall
+                b.walls[3] = false; // Remove b's left wall
+            }
+
+            let y = a.j - b.j;
+            if (y === 1) { // a is below b
+                a.walls[0] = false; // Remove a's top wall
+                b.walls[2] = false; // Remove b's bottom wall
+            } else if (y === -1) { // a is above b
+                a.walls[2] = false; // Remove a's bottom wall
+                b.walls[0] = false; // Remove b's top wall
+            }
+        }
+
+        // --- Initialize the grid ---
+        function setupGrid() {
+            grid = new Array(cols);
+            for (let i = 0; i < cols; i++) {
+                grid[i] = new Array(rows);
+            }
+
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    grid[i][j] = new Cell(i, j);
+                }
+            }
+        }
+
+        // --- Generate Maze using Recursive Backtracker (DFS) ---
+        function generateMaze() {
+            setupGrid();
+            let current = grid[0][0]; // Start at top-left
+            current.visited = true;
+            stack = [current];
+
+            while (stack.length > 0) {
+                current = stack[stack.length - 1]; // Get the last element (current cell)
+                let next = current.checkNeighbors();
+
+                if (next) {
+                    next.visited = true;
+                    // Remove walls between current and next
+                    removeWalls(current, next);
+                    // Push next to stack
+                    stack.push(next);
+                } else {
+                    // No unvisited neighbors, backtrack
+                    stack.pop();
+                }
+            }
+        }
+
+        // --- Draw the entire maze ---
+        function drawMaze() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    grid[i][j].show();
+                }
+            }
+
+            // Optional: Mark start and end points
+            ctx.fillStyle = 'lightgreen';
+            ctx.fillRect(0, 0, cellSize, cellSize); // Start
+            ctx.fillStyle = 'salmon';
+            ctx.fillRect((cols - 1) * cellSize, (rows - 1) * cellSize, cellSize, cellSize); // End
+        }
+
+        // --- Main initialization function ---
+        function init() {
+            let mazeDim = parseInt(mazeSizeInput.value);
+            cellSize = parseInt(cellSizeInput.value);
+
+            if (isNaN(mazeDim) || mazeDim < 5 || mazeDim > 100) {
+                mazeDim = 20;
+                mazeSizeInput.value = 20;
+            }
+             if (isNaN(cellSize) || cellSize < 5 || cellSize > 50) {
+                cellSize = 20;
+                cellSizeInput.value = 20;
+            }
+
+
+            cols = mazeDim;
+            rows = mazeDim;
+
+            canvas.width = cols * cellSize;
+            canvas.height = rows * cellSize;
+
+            generateMaze();
+            drawMaze();
+        }
+
+        // --- Event Listeners ---
+        generateButton.addEventListener('click', init);
+        mazeSizeInput.addEventListener('change', init);
+        cellSizeInput.addEventListener('change', init);
+
+        // --- Initial Load ---
+        window.onload = init;
+
+    </script>
+
+</body>
+</html>
