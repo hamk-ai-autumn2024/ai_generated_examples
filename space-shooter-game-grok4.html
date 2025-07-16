@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Space Shooter</title>
+    <style>
+        body { margin: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { border: 1px solid white; background: black; image-rendering: pixelated; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game variables
+        let player = { x: 200, y: 550, width: 20, height: 20, speed: 5, health: 10 };
+        let missiles = [];
+        let enemies = [];
+        let items = [];
+        let boss = null;
+        let gameOver = false;
+        let youWin = false;
+        let wave = 0;
+        let enemiesPerWave = 10;
+        let speedBoostEnd = 0;
+
+        // Keys
+        let keys = {};
+        window.addEventListener('keydown', (e) => { keys[e.key] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+        function restartGame() {
+            player = { x: 200, y: 550, width: 20, height: 20, speed: 5, health: 10 };
+            missiles = [];
+            enemies = [];
+            items = [];
+            boss = null;
+            gameOver = false;
+            youWin = false;
+            wave = 0;
+            speedBoostEnd = 0;
+            spawnWave();
+        }
+
+        function spawnWave() {
+            wave++;
+            for (let i = 0; i < enemiesPerWave; i++) {
+                enemies.push({
+                    x: Math.random() * (canvas.width - 20),
+                    y: Math.random() * -100 - 20,
+                    width: 15,
+                    height: 15,
+                    speed: 1 + wave * 0.2
+                });
+            }
+            if (wave >= 5 &amp;&amp; !boss) {
+                boss = { x: canvas.width / 2 - 50, y: -100, width: 100, height: 100, health: 50, speed: 0.5 };
+            }
+        }
+
+        function update() {
+            if (gameOver || youWin) return;
+
+            // Player movement
+            let currentSpeed = (Date.now() < speedBoostEnd) ? player.speed * 1.5 : player.speed;
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) player.x -= currentSpeed;
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) player.x += currentSpeed;
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+            // Shooting
+            if (keys[' ']) {
+                if (!keys.spacePressed) {
+                    missiles.push({ x: player.x + player.width / 2 - 2.5, y: player.y, width: 5, height: 10, speed: 10 });
+                    keys.spacePressed = true;
+                }
+            } else {
+                keys.spacePressed = false;
+            }
+
+            // Missile movement
+            missiles.forEach((m, i) => {
+                m.y -= m.speed;
+                if (m.y + m.height < 0) missiles.splice(i, 1);
+            });
+
+            // Enemy movement
+            enemies.forEach((e, i) => {
+                e.y += e.speed;
+                if (e.y > canvas.height) enemies.splice(i, 1);
+
+                // Collision with player
+                if (e.x < player.x + player.width &amp;&amp; e.x + e.width > player.x &amp;&amp;
+                    e.y < player.y + player.height &amp;&amp; e.y + e.height > player.y) {
+                    player.health--;
+                    enemies.splice(i, 1);
+                    if (player.health <= 0) gameOver = true;
+                }
+
+                // Collision with missiles
+                missiles.forEach((m, j) => {
+                    if (m.x < e.x + e.width &amp;&amp; m.x + m.width > e.x &amp;&amp;
+                        m.y < e.y + e.height &amp;&amp; m.y + m.height > e.y) {
+                        missiles.splice(j, 1);
+                        enemies.splice(i, 1);
+                        if (Math.random() < 0.2) {
+                            let type = Math.random() < 0.5 ? 'H' : 'S';
+                            items.push({ x: e.x, y: e.y, type, speed: 2 });
+                        }
+                    }
+                });
+            });
+
+            // Boss movement and logic
+            if (boss) {
+                boss.y += boss.speed;
+                if (boss.y > 50) boss.speed = 0; // Stop at top
+
+                // Collision with player
+                if (boss.x < player.x + player.width &amp;&amp; boss.x + boss.width > player.x &amp;&amp;
+                    boss.y < player.y + player.height &amp;&amp; boss.y + boss.height > player.y) {
+                    player.health--;
+                    if (player.health <= 0) gameOver = true;
+                }
+
+                // Collision with missiles
+                missiles.forEach((m, j) => {
+                    if (m.x < boss.x + boss.width &amp;&amp; m.x + m.width > boss.x &amp;&amp;
+                        m.y < boss.y + boss.height &amp;&amp; m.y + m.height > boss.y) {
+                        missiles.splice(j, 1);
+                        boss.health--;
+                        if (boss.health <= 0) {
+                            youWin = true;
+                            boss = null;
+                        }
+                    }
+                });
+            }
+
+            // Items movement and pickup
+            items.forEach((item, i) => {
+                item.y += item.speed;
+                if (item.y > canvas.height) items.splice(i, 1);
+
+                if (item.x < player.x + player.width &amp;&amp; item.x + 20 > player.x &amp;&amp;
+                    item.y < player.y + player.height &amp;&amp; item.y + 20 > player.y) {
+                    if (item.type === 'H') player.health += 3;
+                    if (item.type === 'S') speedBoostEnd = Date.now() + 10000;
+                    items.splice(i, 1);
+                }
+            });
+
+            // Spawn new wave if no enemies
+            if (enemies.length === 0 &amp;&amp; !boss) spawnWave();
+
+            // Restart
+            if (keys['r'] || keys['R']) restartGame();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw player (retro triangle ship)
+            ctx.fillStyle = 'lime';
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2, player.y);
+            ctx.lineTo(player.x, player.y + player.height);
+            ctx.lineTo(player.x + player.width, player.y + player.height);
+            ctx.fill();
+
+            // Draw missiles (bright vertical bars)
+            ctx.fillStyle = 'yellow';
+            missiles.forEach(m => ctx.fillRect(m.x, m.y, m.width, m.height));
+
+            // Draw enemies (retro red squares)
+            ctx.fillStyle = 'red';
+            enemies.forEach(e => ctx.fillRect(e.x, e.y, e.width, e.height));
+
+            // Draw boss (large purple retro boss)
+            if (boss) {
+                ctx.fillStyle = 'purple';
+                ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '16px monospace';
+                ctx.fillText(`Boss HP: ${boss.health}`, boss.x, boss.y - 10);
+            }
+
+            // Draw items
+            ctx.font = '20px monospace';
+            items.forEach(item => {
+                ctx.fillStyle = item.type === 'H' ? 'pink' : 'cyan';
+                ctx.fillText(item.type, item.x, item.y);
+            });
+
+            // Draw health
+            ctx.fillStyle = 'white';
+            ctx.font = '16px monospace';
+            ctx.fillText(`HP: ${player.health}`, 10, 20);
+
+            if (gameOver) {
+                ctx.fillStyle = 'red';
+                ctx.font = '40px monospace';
+                ctx.fillText('Game Over', 50, 300);
+                ctx.font = '20px monospace';
+                ctx.fillText('Press R to Restart', 80, 350);
+            }
+
+            if (youWin) {
+                ctx.fillStyle = 'green';
+                ctx.font = '40px monospace';
+                ctx.fillText('You Win!', 80, 300);
+                ctx.font = '20px monospace';
+                ctx.fillText('Press R to Restart', 80, 350);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        spawnWave();
+        gameLoop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Retro Space Shooter</title>
+  <style>
+    html,body{margin:0;background:#000;color:#0f0;font-family:'Courier New',Courier,monospace;font-size:18px}
+    canvas{background:#000;display:block;margin:0 auto;border:2px solid #0f0;image-rendering:pixelated}
+    #hud{position:absolute;top:10px;left:50%;transform:translateX(-50%);text-align:center}
+  </style>
+</head>
+<body>
+
+<div id="hud">
+  <span id="hp">HP: 10</span> |
+  <span id="score">Score: 0</span> |
+  <span id="wave">Wave: 1</span>
+</div>
+
+<canvas id="cvs"></canvas>
+
+<script>
+/* ---------- CONFIG ---------- */
+const W = 480, H = 640;
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+cvs.width = W;
+cvs.height = H;
+ctx.imageSmoothingEnabled = false;
+
+/* ---------- STATE ---------- */
+let keys = {};
+onkeydown = e => keys[e.code] = true;
+onkeyup   = e => keys[e.code] = false;
+
+let player, bullets, enemies, items, particles, wave, boss, gameOver, win, score, nextWave;
+const PLAYER_W = 32, PLAYER_H = 24;
+const BULLET_W = 4, BULLET_H = 16;
+const ENEMY_W  = 28, ENEMY_H = 20;
+
+/* ---------- INIT ---------- */
+function reset() {
+  player = {
+    x: W/2-PLAYER_W/2,
+    y: H-PLAYER_H-20,
+    w: PLAYER_W,
+    h: PLAYER_H,
+    hp: 10,
+    speed: 5,
+    speedBoost: 0
+  };
+  bullets = [];
+  enemies = [];
+  items = [];
+  particles = [];
+  wave = 1;
+  boss = null;
+  gameOver = false;
+  win = false;
+  score = 0;
+  nextWave = 0;
+  spawnWave();
+}
+
+/* ---------- UTIL ---------- */
+const rand = (min,max)=>Math.random()*(max-min)+min;
+const rectCollide = (a,b)=>a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+
+function addParticle(x,y,color) {
+  for(let i=0;i<8;i++){
+    particles.push({
+      x:x+rand(-8,8), y:y+rand(-8,8),
+      vx:rand(-2,2), vy:rand(-2,2),
+      life:20,
+      color
+    });
+  }
+}
+
+/* ---------- INPUT ---------- */
+function handleInput() {
+  let spd = player.speed * (player.speedBoost>0?1.5:1);
+  if(keys['ArrowLeft'] || keys['KeyA']) player.x -= spd;
+  if(keys['ArrowRight'] || keys['KeyD']) player.x += spd;
+  player.x = Math.max(0, Math.min(W-player.w, player.x));
+
+  if(keys['Space']) {
+    if(!bullets.find(b=>b.fromPlayer)) {
+      bullets.push({
+        x: player.x+player.w/2-BULLET_W/2,
+        y: player.y,
+        w: BULLET_W,
+        h: BULLET_H,
+        vy: -12,
+        fromPlayer: true
+      });
+    }
+    keys['Space'] = false; // single shot
+  }
+}
+
+/* ---------- SPAWNING ---------- */
+function spawnWave() {
+  const count = 5 + wave*2;
+  for(let i=0;i<count;i++){
+    setTimeout(()=>{
+      enemies.push({
+        x: rand(0, W-ENEMY_W),
+        y: -ENEMY_H,
+        w: ENEMY_W,
+        h: ENEMY_H,
+        hp: 1,
+        vy: 1 + wave*0.2,
+        vx: rand(-0.5,0.5)
+      });
+    }, i*300);
+  }
+  nextWave = Date.now() + 4000 + count*300;
+}
+
+function spawnBoss() {
+  boss = {
+    x: W/2 - 60,
+    y: -120,
+    w: 120,
+    h: 80,
+    hp: 50,
+    vy: 0.5,
+    vx: 0,
+    dir: 1,
+    shootTimer: 0
+  };
+}
+
+/* ---------- UPDATE ---------- */
+function update() {
+  if(gameOver || win) return;
+
+  handleInput();
+
+  /* timers */
+  if(player.speedBoost>0) player.speedBoost--;
+  if(Date.now() > nextWave && !boss && !enemies.length) {
+    if(wave===5) spawnBoss();
+    else { wave++; spawnWave(); }
+  }
+
+  /* bullets */
+  bullets.forEach((b,i)=>{
+    b.y += b.vy;
+    if(b.y < -b.h || b.y > H) bullets.splice(i,1);
+  });
+
+  /* boss */
+  if(boss) {
+    boss.x += boss.vx;
+    if(boss.x <= 0 || boss.x+boss.w >= W) boss.vx *= -1;
+    boss.shootTimer++;
+    if(boss.shootTimer>60){
+      boss.shootTimer=0;
+      bullets.push({
+        x: boss.x+boss.w/2-BULLET_W/2,
+        y: boss.y+boss.h,
+        w: BULLET_W,
+        h: BULLET_H,
+        vy: 4,
+        fromPlayer: false
+      });
+    }
+  }
+
+  /* enemies */
+  enemies.forEach((e,i)=>{
+    e.y += e.vy;
+    e.x += e.vx;
+    if(e.x <=0 || e.x+e.w>=W) e.vx*=-1;
+    if(e.y > H) enemies.splice(i,1);
+  });
+
+  /* items */
+  items.forEach((it,i)=>{
+    it.y += 2;
+    if(it.y>H) items.splice(i,1);
+  });
+
+  /* particles */
+  particles.forEach(p=>{
+    p.x+=p.vx;
+    p.y+=p.vy;
+    p.life--;
+  });
+  particles = particles.filter(p=>p.life>0);
+
+  /* collisions */
+  bullets.forEach((b,bi)=>{
+    if(b.fromPlayer) {
+      // vs enemies
+      enemies.forEach((e,ei)=>{
+        if(rectCollide(b,e)){
+          bullets.splice(bi,1);
+          enemies.splice(ei,1);
+          score += 10;
+          addParticle(e.x+e.w/2,e.y+e.h/2,'#0f0');
+          if(Math.random()<0.2){
+            items.push({
+              x: e.x+e.w/2-8,
+              y: e.y+e.h,
+              w: 16,
+              h: 16,
+              type: Math.random()<0.5?'H':'S'
+            });
+          }
+        }
+      });
+      // vs boss
+      if(boss && rectCollide(b,boss)){
+        bullets.splice(bi,1);
+        boss.hp--;
+        score += 5;
+        addParticle(b.x,b.y,'#f0f');
+        if(boss.hp<=0){
+          win = true;
+          boss = null;
+        }
+      }
+    } else {
+      // enemy bullets vs player
+      if(rectCollide(b,player)){
+        bullets.splice(bi,1);
+        player.hp--;
+        addParticle(player.x+player.w/2,player.y+player.h/2,'#f00');
+        if(player.hp<=0) gameOver = true;
+      }
+    }
+  });
+
+  /* player vs enemies */
+  enemies.forEach((e,ei)=>{
+    if(rectCollide(player,e)){
+      enemies.splice(ei,1);
+      player.hp--;
+      addParticle(player.x+player.w/2,player.y+player.h/2,'#f00');
+      if(player.hp<=0) gameOver = true;
+    }
+  });
+
+  /* player vs items */
+  items.forEach((it,ii)=>{
+    if(rectCollide(player,it)){
+      items.splice(ii,1);
+      if(it.type==='H') player.hp = Math.min(player.hp+3,20);
+      if(it.type==='S') player.speedBoost = 600; // 10s * 60fps
+    }
+  });
+}
+
+/* ---------- DRAW ---------- */
+function draw() {
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,W,H);
+
+  /* stars */
+  ctx.fillStyle='#222';
+  for(let i=0;i<50;i++){
+    ctx.fillRect((i*73)%W,(Date.now()/20+i*29)%H,1,1);
+  }
+
+  /* player */
+  ctx.fillStyle='#0ff';
+  ctx.fillRect(player.x,player.y,player.w,player.h);
+  ctx.fillStyle='#fff';
+  ctx.fillRect(player.x+player.w/2-2,player.y-4,4,4);
+
+  /* bullets */
+  ctx.fillStyle='#ff0';
+  bullets.forEach(b=>ctx.fillRect(b.x,b.y,b.w,b.h));
+
+  /* enemies */
+  ctx.fillStyle='#f00';
+  enemies.forEach(e=>ctx.fillRect(e.x,e.y,e.w,e.h));
+
+  /* boss */
+  if(boss){
+    ctx.fillStyle='#f0f';
+    ctx.fillRect(boss.x,boss.y,boss.w,boss.h);
+    ctx.fillStyle='#fff';
+    ctx.fillRect(boss.x,boss.y-10,boss.w,4);
+    ctx.fillRect(boss.x,boss.y-10,boss.w*(boss.hp/50),4);
+  }
+
+  /* items */
+  items.forEach(it=>{
+    ctx.fillStyle = it.type==='H' ? '#f00' : '#0ff';
+    if(it.type==='H'){
+      // simple heart
+      ctx.fillRect(it.x+6,it.y+2,4,12);
+      ctx.fillRect(it.x+2,it.y+6,12,4);
+      ctx.fillRect(it.x+4,it.y+4,2,2);
+      ctx.fillRect(it.x+10,it.y+4,2,2);
+    } else {
+      ctx.fillText('S',it.x+2,it.y+12);
+    }
+  });
+
+  /* particles */
+  particles.forEach(p=>{
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x,p.y,2,2);
+  });
+
+  /* hud */
+  document.getElementById('hp').textContent = 'HP: '+player.hp;
+  document.getElementById('score').textContent = 'Score: '+score;
+  document.getElementById('wave').textContent = 'Wave: '+wave + (boss ? ' - BOSS' : '');
+
+  /* messages */
+  if(gameOver){
+    ctx.fillStyle='#f00';
+    ctx.font='40px monospace';
+    ctx.textAlign='center';
+    ctx.fillText('GAME OVER',W/2,H/2);
+  }
+  if(win){
+    ctx.fillStyle='#0f0';
+    ctx.font='40px monospace';
+    ctx.textAlign='center';
+    ctx.fillText('YOU WIN',W/2,H/2);
+  }
+}
+
+/* ---------- LOOP ---------- */
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- RESTART ---------- */
+onkeydown = e => {
+  keys[e.code] = true;
+  if(e.code==='KeyR' && (gameOver||win)) reset();
+};
+
+reset();
+loop();
+</script>
+</body>
+</html>
