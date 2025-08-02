@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Install Flask - Python Web Framework</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        header {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-top: 10px;
+        }
+        .content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        h2 {
+            color: #2575fc;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #6a11cb;
+            margin-top: 25px;
+        }
+        .code-block {
+            background-color: #f1f3f4;
+            border-left: 4px solid #2575fc;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            font-size: 0.95rem;
+        }
+        .step {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .step-number {
+            background: #2575fc;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        .step-content {
+            flex: 1;
+        }
+        .note {
+            background-color: #e7f3ff;
+            border-left: 4px solid #2575fc;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        ul, ol {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        a {
+            color: #2575fc;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>How to Install Flask</h1>
+        <p class="subtitle">A step-by-step guide to setting up Flask for Python web development</p>
+    </header>
+
+    <div class="content">
+        <h2>What is Flask?</h2>
+        <p>Flask is a lightweight web framework for Python that provides essential tools and features for building web applications. It's designed to make getting started quick and easy, with the ability to scale up to complex applications.</p>
+
+        <h2>Prerequisites</h2>
+        <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h3>Install Python</h3>
+                <p>Flask requires Python 3.7 or newer. If you don't have Python installed:</p>
+                <ol>
+                    <li>Visit <a href="https://www.python.org/downloads/" target="_blank">python.org</a></li>
+                    <li>Download the latest version for your operating system</li>
+                    <li>Run the installer and make sure to check "Add Python to PATH" during installation</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h3>Verify Python Installation</h3>
+                <p>Open your terminal/command prompt and run:</p>
+                <div class="code-block">
+                    python --version
+                </div>
+                <p>You should see output like <code>Python 3.x.x</code>. If you get an error, Python may not be installed correctly or not added to your PATH.</p>
+            </div>
+        </div>
+
+        <h2>Installing Flask</h2>
+        <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h3>Using pip (Recommended)</h3>
+                <p>The easiest way to install Flask is using pip, Python's package installer:</p>
+                <div class="code-block">
+                    pip install Flask
+                </div>
+                <p>If you have both Python 2 and 3 installed, you might need to use:</p>
+                <div class="code-block">
+                    pip3 install Flask
+                </div>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <h3>Using Virtual Environments (Highly Recommended)</h3>
+                <p>Virtual environments isolate your project dependencies. This is considered a best practice:</p>
+                
+                <h4>Create a Virtual Environment</h4>
+                <div class="code-block">
+                    # Create a virtual environment named "venv"
+                    python -m venv venv
+                    
+                    # Activate the virtual environment
+                    # On Windows:
+                    venv\Scripts\activate
+                    # On macOS/Linux:
+                    source venv/bin/activate
+                </div>
+                
+                <h4>Install Flask in the Virtual Environment</h4>
+                <div class="code-block">
+                    pip install Flask
+                </div>
+                
+                <h4>Deactivate the Virtual Environment</h4>
+                <div class="code-block">
+                    deactivate
+                </div>
+            </div>
+        </div>
+
+        <h2>Verifying Installation</h2>
+        <div class="step">
+            <div class="step-number">5</div>
+            <div class="step-content">
+                <h3>Check Flask Version</h3>
+                <p>After installation, verify Flask is installed correctly:</p>
+                <div class="code-block">
+                    python -c "import flask; print(flask.__version__)"
+                </div>
+                <p>You should see the Flask version number.</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">6</div>
+            <div class="step-content">
+                <h3>Create a Simple Test Application</h3>
+                <p>Create a file named <code>app.py</code> with the following content:</p>
+                <div class="code-block">
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello():
+    return 'Hello, Flask!'
+
+if __name__ == '__main__':
+    app.run(debug=True)
+                </div>
+                
+                <p>Run the application:</p>
+                <div class="code-block">
+                    python app.py
+                </div>
+                
+                <p>You should see output similar to:</p>
+                <div class="code-block">
+ * Running on http://127.0.0.1:5000
+ * Debug mode: on
+                </div>
+                
+                <p>Open your web browser and go to <a href="http://127.0.0.1:5000" target="_blank">http://127.0.0.1:5000</a> to see your application.</p>
+            </div>
+        </div>
+
+        <h2>Troubleshooting</h2>
+        <div class="note">
+            <p><strong>Note:</strong> If you encounter permission errors when installing Flask, try using the <code>--user</code> flag:</p>
+            <div class="code-block">
+                pip install --user Flask
+            </div>
+        </div>
+
+        <div class="warning">
+            <p><strong>Warning:</strong> On some systems, you might need to use <code>python3</code> and <code>pip3</code> instead of <code>python</code> and <code>pip</code> if you have both Python 2 and 3 installed.</p>
+        </div>
+
+        <h2>Next Steps</h2>
+        <p>Now that you have Flask installed, you can:</p>
+        <ul>
+            <li>Follow the <a href="flask_tutorial.html">Flask Tutorial</a> in this repository</li>
+            <li>Explore the <a href="flask_example_README.md">Flask Example Application</a></li>
+            <li>Check out the <a href="flask_learning_summary.md">Flask Learning Summary</a></li>
+            <li>Visit the <a href="https://flask.palletsprojects.com/" target="_blank">Official Flask Documentation</a></li>
+        </ul>
+
+        <h2>Common Flask Commands</h2>
+        <div class="code-block">
+# Install Flask
+pip install Flask
+
+# Create a virtual environment
+python -m venv venv
+
+# Activate virtual environment (Windows)
+venv\Scripts\activate
+
+# Activate virtual environment (macOS/Linux)
+source venv/bin/activate
+
+# Deactivate virtual environment
+deactivate
+
+# Check Flask version
+python -c "import flask; print(flask.__version__)"
+
+# Run a Flask application
+python app.py
+        </div>
+    </div>
+
+    <footer>
+        <p>Flask Installation Guide &copy; 2023 | Part of the Flask Learning Resources</p>
+    </footer>
+</body>
+</html>

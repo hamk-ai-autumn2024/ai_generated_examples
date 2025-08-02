@@ -1,0 +1,13 @@
+{% extends "flask_base.html" %}
+
+{% block title %}{{ book.title }} - Flask Example App{% endblock %}
+
+{% block content %}
+<h2>{{ book.title }}</h2>
+<p><strong>Author:</strong> {{ book.author }}</p>
+<p><strong>Publication Year:</strong> {{ book.year }}</p>
+
+<div style="margin-top: 20px;">
+    <a href="{{ url_for('home') }}" style="display: inline-block; background-color: #007acc; color: white; padding: 10px 15px; text-decoration: none; border-radius: 3px;">Back to Collection</a>
+</div>
+{% endblock %}

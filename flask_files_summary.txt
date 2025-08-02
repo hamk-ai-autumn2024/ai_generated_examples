@@ -1,0 +1,62 @@
+FLASK LEARNING RESOURCES - FILE SUMMARY
+=======================================
+
+This document lists all the Flask learning resources created in this repository.
+
+HTML FILES:
+-----------
+1. flask_tutorial.html          - Complete interactive Flask tutorial
+2. install_flask.html           - Step-by-step installation guide
+3. index.html                   - Navigation hub for all resources
+4. flask_demo/templates/base.html    - Base template for demo app
+5. flask_demo/templates/home.html    - Home page for demo app
+6. flask_demo/templates/about.html   - About page for demo app
+7. flask_demo/templates/post.html    - Post page for demo app
+8. flask_demo/templates/create.html  - Create post page for demo app
+9. templates/flask_base.html    - Base template for example app
+10. templates/flask_index.html   - Home page for example app
+11. templates/flask_about.html   - About page for example app
+12. templates/flask_book.html    - Book detail page for example app
+13. templates/flask_add_book.html - Add book page for example app
+
+MARKDOWN FILES:
+---------------
+1. flask_learning_summary.md     - Detailed Flask concept explanations
+2. flask_example_README.md       - How to run the example application
+3. flask_requirements.txt        - Dependencies for the example app
+4. flask_demo/README.md          - README for the demo application
+5. flask_demo/requirements.txt   - Dependencies for the demo app
+6. flask_resources_overview.md   - Overview of all Flask resources
+7. getting_started_with_flask.md - Getting started guide
+8. complete_flask_learning_guide.md - Complete learning guide
+9. README_FLASK.md              - Main README for Flask resources
+
+PYTHON FILES:
+-------------
+1. flask_example.py              - Main Flask example application
+2. flask_demo/app.py            - Main Flask demo application
+3. flask_quickstart.py           - Quickstart explanation
+4. check_flask_installation.py   - Script to check Flask installation
+5. flask_concepts_explained.py   - Explanation of Flask concepts
+6. open_resources.py            - Script to open resources in browser
+7. start_flask_learning.py       - Interactive learning starter
+8. check_flask.py               - Simple Flask check script
+
+BATCH FILES:
+------------
+1. run_flask_example.bat         - Run the example application (Windows)
+2. start_flask_learning.bat      - Start the learning process (Windows)
+
+DIRECTORIES:
+------------
+1. templates/                    - HTML templates for the example app
+2. flask_demo/                   - Complete Flask demo application
+3. flask_demo/templates/        - HTML templates for the demo app
+4. flask_demo/static/           - Static files for the demo app
+5. static/                       - Static files for the example app
+
+TOTAL FILES CREATED: 20+
+TOTAL DIRECTORIES CREATED: 5+
+
+These resources provide a comprehensive learning environment for Flask, 
+covering everything from basic concepts to practical application development.

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask Tutorial - Learn Python Web Development</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+            background-color: #f8f9fa;
+        }
+        .tutorial-section {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        .nav-link {
+            font-weight: 500;
+        }
+        h2 {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #007bff;
+            margin-top: 25px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="sticky-top" style="top: 20px;">
+                    <h3>Flask Tutorial</h3>
+                    <div class="list-group">
+                        <a href="#introduction" class="list-group-item list-group-item-action">Introduction</a>
+                        <a href="#installation" class="list-group-item list-group-item-action">Installation</a>
+                        <a href="#hello-world" class="list-group-item list-group-item-action">Hello World</a>
+                        <a href="#routing" class="list-group-item list-group-item-action">Routing</a>
+                        <a href="#templates" class="list-group-item list-group-item-action">Templates</a>
+                        <a href="#forms" class="list-group-item list-group-item-action">Forms</a>
+                        <a href="#database" class="list-group-item list-group-item-action">Database Integration</a>
+                        <a href="#deployment" class="list-group-item list-group-item-action">Deployment</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-9">
+                <div class="tutorial-section">
+                    <h1 class="text-center mb-4">Flask Tutorial: Learn Python Web Development</h1>
+                    <p class="lead">Flask is a lightweight web framework for Python that provides essential tools and features for building web applications. It's designed to make getting started quick and easy, with the ability to scale up to complex applications.</p>
+                </div>
+
+                <div id="introduction" class="tutorial-section">
+                    <h2>Introduction to Flask</h2>
+                    <h3>What is Flask?</h3>
+                    <p>Flask is a micro web framework written in Python. It's classified as a microframework because it does not require particular tools or libraries. It has no database abstraction layer, form validation, or any other components where pre-existing third-party libraries provide common functions.</p>
+                    
+                    <h3>Why Use Flask?</h3>
+                    <ul>
+                        <li><strong>Lightweight and Flexible:</strong> Flask doesn't enforce specific project structure or dependencies</li>
+                        <li><strong>Easy to Learn:</strong> Simple syntax and minimal setup requirements</li>
+                        <li><strong>Extensible:</strong> Large ecosystem of extensions for added functionality</li>
+                        <li><strong>Built-in Development Server:</strong> No need for external servers during development</li>
+                        <li><strong>Integrated Unit Testing Support:</strong> Built-in support for unit testing</li>
+                    </ul>
+                    
+                    <h3>Flask vs Django</h3>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4>Flask</h4>
+                            <ul>
+                                <li>Microframework</li>
+                                <li>Minimal dependencies</li>
+                                <li>Flexible structure</li>
+                                <li>Manual setup required</li>
+                                <li>Good for small to medium apps</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h4>Django</h4>
+                            <ul>
+                                <li>Full-featured framework</li>
+                                <li>Batteries included</li>
+                                <li>Opinionated structure</li>
+                                <li>Built-in admin panel</li>
+                                <li>Good for large, complex apps</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="installation" class="tutorial-section">
+                    <h2>Installing Flask</h2>
+                    <p>Before we start building applications with Flask, we need to install it. Flask requires Python 3.7 or newer.</p>
+                    
+                    <h3>Using pip</h3>
+                    <p>The easiest way to install Flask is using pip:</p>
+                    <div class="code-block">
+                        pip install Flask
+                    </div>
+                    
+                    <h3>Virtual Environment (Recommended)</h3>
+                    <p>It's best practice to use a virtual environment for Python projects:</p>
+                    <div class="code-block">
+                        # Create a virtual environment
+                        python -m venv myenv
+                        
+                        # Activate the virtual environment
+                        # On Windows:
+                        myenv\Scripts\activate
+                        # On macOS/Linux:
+                        source myenv/bin/activate
+                        
+                        # Install Flask
+                        pip install Flask
+                    </div>
+                </div>
+
+                <div id="hello-world" class="tutorial-section">
+                    <h2>Your First Flask Application</h2>
+                    <p>Let's create a simple "Hello, World!" application to get started with Flask.</p>
+                    
+                    <h3>Basic Flask App</h3>
+                    <p>Create a file called <code>app.py</code>:</p>
+                    <div class="code-block">
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello():
+    return 'Hello, World!'
+
+if __name__ == '__main__':
+    app.run(debug=True)
+                    </div>
+                    
+                    <h3>Running the Application</h3>
+                    <p>Save the file and run it:</p>
+                    <div class="code-block">
+                        python app.py
+                    </div>
+                    
+                    <p>You should see output similar to:</p>
+                    <div class="code-block">
+ * Running on http://127.0.0.1:5000
+ * Debug mode: on
+                    </div>
+                    
+                    <p>Open your web browser and go to <code>http://127.0.0.1:5000</code> to see your application.</p>
+                </div>
+
+                <div id="routing" class="tutorial-section">
+                    <h2>Routing in Flask</h2>
+                    <p>Routing refers to mapping URLs to functions in your application.</p>
+                    
+                    <h3>Basic Routes</h3>
+                    <div class="code-block">
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return 'Home Page'
+
+@app.route('/about')
+def about():
+    return 'About Page'
+
+@app.route('/contact')
+def contact():
+    return 'Contact Page'
+                    </div>
+                    
+                    <h3>Dynamic Routes</h3>
+                    <p>You can create dynamic routes with variable parts:</p>
+                    <div class="code-block">
+@app.route('/user/&lt;username&gt;')
+def show_user(username):
+    return f'User: {username}'
+
+@app.route('/post/&lt;int:post_id&gt;')
+def show_post(post_id):
+    return f'Post ID: {post_id}'
+                    </div>
+                    
+                    <h3>HTTP Methods</h3>
+                    <p>Specify which HTTP methods a route should accept:</p>
+                    <div class="code-block">
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        return 'Processing login...'
+    else:
+        return 'Login form'
+                    </div>
+                </div>
+
+                <div id="templates" class="tutorial-section">
+                    <h2>Templates in Flask</h2>
+                    <p>Templates allow you to separate HTML from Python code and make your applications more maintainable.</p>
+                    
+                    <h3>Setting Up Templates</h3>
+                    <p>Create a <code>templates</code> directory in your project folder:</p>
+                    <div class="code-block">
+project/
+├── app.py
+└── templates/
+    ├── base.html
+    ├── home.html
+    └── about.html
+                    </div>
+                    
+                    <h3>Basic Template</h3>
+                    <p><code>templates/base.html</code>:</p>
+                    <div class="code-block">
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;{% block title %}My Flask App{% endblock %}&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;nav&gt;
+        &lt;a href="{{ url_for('home') }}"&gt;Home&lt;/a&gt;
+        &lt;a href="{{ url_for('about') }}"&gt;About&lt;/a&gt;
+    &lt;/nav&gt;
+    
+    {% block content %}{% endblock %}
+&lt;/body&gt;
+&lt;/html&gt;
+                    </div>
+                    
+                    <p><code>templates/home.html</code>:</p>
+                    <div class="code-block">
+{% extends "base.html" %}
+
+{% block title %}Home - My Flask App{% endblock %}
+
+{% block content %}
+&lt;h1&gt;Welcome to My Flask App&lt;/h1&gt;
+&lt;p&gt;This is the home page.&lt;/p&gt;
+{% endblock %}
+                    </div>
+                    
+                    <h3>Rendering Templates</h3>
+                    <div class="code-block">
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return render_template('home.html')
+
+@app.route('/about')
+def about():
+    return render_template('about.html', title='About')
+                    </div>
+                    
+                    <h3>Template Variables</h3>
+                    <div class="code-block">
+@app.route('/user/&lt;name&gt;')
+def user(name):
+    return render_template('user.html', name=name)
+                    </div>
+                    
+                    <p><code>templates/user.html</code>:</p>
+                    <div class="code-block">
+{% extends "base.html" %}
+
+{% block content %}
+&lt;h1&gt;Hello, {{ name }}!&lt;/h1&gt;
+&lt;p&gt;Welcome to our application.&lt;/p&gt;
+{% endblock %}
+                    </div>
+                </div>
+
+                <div id="forms" class="tutorial-section">
+                    <h2>Working with Forms</h2>
+                    <p>Flask makes it easy to handle form data from HTML forms.</p>
+                    
+                    <h3>HTML Form</h3>
+                    <p><code>templates/contact.html</code>:</p>
+                    <div class="code-block">
+{% extends "base.html" %}
+
+{% block content %}
+&lt;h1&gt;Contact Us&lt;/h1&gt;
+&lt;form method="POST"&gt;
+    &lt;div&gt;
+        &lt;label for="name"&gt;Name:&lt;/label&gt;
+        &lt;input type="text" id="name" name="name" required&gt;
+    &lt;/div&gt;
+    &lt;div&gt;
+        &lt;label for="email"&gt;Email:&lt;/label&gt;
+        &lt;input type="email" id="email" name="email" required&gt;
+    &lt;/div&gt;
+    &lt;div&gt;
+        &lt;label for="message"&gt;Message:&lt;/label&gt;
+        &lt;textarea id="message" name="message" required&gt;&lt;/textarea&gt;
+    &lt;/div&gt;
+    &lt;button type="submit"&gt;Send&lt;/button&gt;
+&lt;/form&gt;
+{% endblock %}
+                    </div>
+                    
+                    <h3>Processing Form Data</h3>
+                    <div class="code-block">
+from flask import Flask, render_template, request, redirect, url_for
+
+app = Flask(__name__)
+
+@app.route('/contact', methods=['GET', 'POST'])
+def contact():
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        message = request.form['message']
+        
+        # Process the form data (e.g., save to database, send email)
+        print(f"Name: {name}, Email: {email}, Message: {message}")
+        
+        # Redirect to a thank you page
+        return redirect(url_for('thank_you'))
+    
+    return render_template('contact.html')
+
+@app.route('/thank-you')
+def thank_you():
+    return render_template('thank_you.html')
+                    </div>
+                </div>
+
+                <div id="database" class="tutorial-section">
+                    <h2>Database Integration</h2>
+                    <p>Flask works well with various databases. Here's how to integrate SQLite with Flask.</p>
+                    
+                    <h3>Using SQLite with Flask</h3>
+                    <div class="code-block">
+import sqlite3
+from flask import Flask, render_template, request, redirect, url_for
+
+app = Flask(__name__)
+
+def init_db():
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL,
+                  email TEXT NOT NULL)''')
+    conn.commit()
+    conn.close()
+
+@app.route('/users')
+def users():
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute('SELECT * FROM users')
+    users = c.fetchall()
+    conn.close()
+    return render_template('users.html', users=users)
+
+@app.route('/add_user', methods=['POST'])
+def add_user():
+    name = request.form['name']
+    email = request.form['email']
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute('INSERT INTO users (name, email) VALUES (?, ?)', (name, email))
+    conn.commit()
+    conn.close()
+    
+    return redirect(url_for('users'))
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True)
+                    </div>
+                    
+                    <h3>Using SQLAlchemy (ORM)</h3>
+                    <p>For more complex applications, you might want to use SQLAlchemy:</p>
+                    <div class="code-block">
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
+db = SQLAlchemy(app)
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+
+    def __repr__(self):
+        return f'&lt;User {self.name}&gt;'
+
+# Create tables
+with app.app_context():
+    db.create_all()
+                    </div>
+                </div>
+
+                <div id="deployment" class="tutorial-section">
+                    <h2>Deploying Flask Applications</h2>
+                    <p>There are several options for deploying Flask applications.</p>
+                    
+                    <h3>Production WSGI Servers</h3>
+                    <ul>
+                        <li><strong>Gunicorn:</strong> Popular WSGI server for UNIX systems</li>
+                        <li><strong>uWSGI:</strong> Full-featured WSGI server</li>
+                        <li><strong>Waitress:</strong> Pure Python WSGI server for Windows and UNIX</li>
+                    </ul>
+                    
+                    <h3>Cloud Platforms</h3>
+                    <ul>
+                        <li><strong>Heroku:</strong> Easy deployment with git push</li>
+                        <li><strong>PythonAnywhere:</strong> Simple Python hosting</li>
+                        <li><strong>AWS Elastic Beanstalk:</strong> Amazon's platform-as-a-service</li>
+                        <li><strong>Google App Engine:</strong> Google's serverless platform</li>
+                    </ul>
+                    
+                    <h3>Example with Gunicorn</h3>
+                    <div class="code-block">
+# Install Gunicorn
+pip install gunicorn
+
+# Run your app with Gunicorn
+gunicorn app:app
+                    </div>
+                </div>
+
+                <div class="tutorial-section">
+                    <h2>Next Steps</h2>
+                    <p>Now that you've learned the basics of Flask, here are some resources to continue your learning:</p>
+                    
+                    <ul>
+                        <li><a href="https://flask.palletsprojects.com/">Official Flask Documentation</a></li>
+                        <li><a href="https://flask.palletsprojects.com/en/2.3.x/tutorial/">Flask Tutorial</a></li>
+                        <li><a href="https://realpython.com/tutorials/flask/">Real Python Flask Tutorials</a></li>
+                        <li><a href="https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world">Flask Mega-Tutorial</a></li>
+                    </ul>
+                    
+                    <h3>Popular Flask Extensions</h3>
+                    <ul>
+                        <li><strong>Flask-SQLAlchemy:</strong> Database ORM</li>
+                        <li><strong>Flask-WTF:</strong> Form handling and validation</li>
+                        <li><strong>Flask-Login:</strong> User session management</li>
+                        <li><strong>Flask-Mail:</strong> Email support</li>
+                        <li><strong>Flask-Migrate:</strong> Database migration support</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+</body>
+</html>

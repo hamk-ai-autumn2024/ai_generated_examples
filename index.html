@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask Learning Resources</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        header {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-top: 10px;
+        }
+        .content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        h2 {
+            color: #2575fc;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+            margin-top: 30px;
+        }
+        .resource-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .resource-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .resource-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .resource-card h3 {
+            margin-top: 0;
+            color: #6a11cb;
+        }
+        .resource-card p {
+            color: #495057;
+        }
+        .btn {
+            display: inline-block;
+            background: #2575fc;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #6a11cb;
+            text-decoration: none;
+        }
+        .note {
+            background-color: #e7f3ff;
+            border-left: 4px solid #2575fc;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Flask Learning Resources</h1>
+        <p class="subtitle">A comprehensive collection of resources to learn Flask web development</p>
+    </header>
+
+    <div class="content">
+        <h2>Getting Started</h2>
+        <p>Welcome to your Flask learning journey! This collection provides everything you need to learn Flask, from basic concepts to practical examples.</p>
+        
+        <div class="note">
+            <p><strong>Note:</strong> You can explore all resources without installing Flask. To run the practical examples, you'll need to install Flask on your system.</p>
+        </div>
+
+        <div class="resource-grid">
+            <div class="resource-card">
+                <h3>Installation Guide</h3>
+                <p>Step-by-step instructions for installing Flask on any system.</p>
+                <a href="install_flask.html" class="btn">View Guide</a>
+            </div>
+            
+            <div class="resource-card">
+                <h3>Comprehensive Tutorial</h3>
+                <p>Complete HTML-based tutorial covering all Flask concepts.</p>
+                <a href="flask_tutorial.html" class="btn">Start Learning</a>
+            </div>
+            
+            <div class="resource-card">
+                <h3>Learning Summary</h3>
+                <p>Detailed Markdown guide explaining Flask concepts and best practices.</p>
+                <a href="flask_learning_summary.md" class="btn">Read Summary</a>
+            </div>
+        </div>
+
+        <h2>Practical Examples</h2>
+        <p>Hands-on resources to help you build real Flask applications.</p>
+        
+        <div class="resource-grid">
+            <div class="resource-card">
+                <h3>Example Application</h3>
+                <p>A complete Flask app demonstrating routing, templates, and forms.</p>
+                <a href="flask_example_README.md" class="btn">View Details</a>
+            </div>
+            
+            <div class="resource-card">
+                <h3>Quickstart Guide</h3>
+                <p>Minimal Flask application to verify your installation.</p>
+                <a href="flask_quickstart.py" class="btn">View Code</a>
+            </div>
+            
+            <div class="resource-card">
+                <h3>Resource Overview</h3>
+                <p>Complete overview of all Flask learning resources in this collection.</p>
+                <a href="flask_resources_overview.md" class="btn">See Overview</a>
+            </div>
+        </div>
+
+        <h2>Learning Path</h2>
+        <ol>
+            <li><strong>Beginner:</strong> Start with the <a href="install_flask.html">Installation Guide</a> and <a href="flask_tutorial.html">Comprehensive Tutorial</a></li>
+            <li><strong>Intermediate:</strong> Explore the <a href="flask_example.py">Example Application</a> and <a href="flask_learning_summary.md">Learning Summary</a></li>
+            <li><strong>Advanced:</strong> Review the <a href="flask_tutorial.html">Tutorial</a> sections on database integration and deployment</li>
+        </ol>
+
+        <h2>Next Steps</h2>
+        <p>After exploring these resources:</p>
+        <ul>
+            <li>Install Flask on your system</li>
+            <li>Run and modify the example application</li>
+            <li>Create your own Flask projects</li>
+            <li>Explore Flask extensions for additional functionality</li>
+        </ul>
+    </div>
+
+    <footer>
+        <p>Flask Learning Resources &copy; 2023 | Happy Learning!</p>
+    </footer>
+</body>
+</html>
