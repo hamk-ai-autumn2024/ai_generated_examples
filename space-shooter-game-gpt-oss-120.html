@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Retro Space Shooter</title>
+<style>
+  body { margin:0; background:#000; overflow:hidden; }
+  #gameCanvas { background:#111; display:block; margin:0 auto; }
+  #overlay {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+    font-family: "Courier New", monospace; font-size:36px; color:#fff;
+    background:rgba(0,0,0,0.7);
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="overlay"></div>
+<script>
+// ------------------------------------------------------
+// Helper functions
+// ------------------------------------------------------
+function clamp(v, min, max){ return v < min ? min : (v > max ? max : v); }
+
+// ------------------------------------------------------
+// Game Setup
+// ------------------------------------------------------
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
+
+const KEY = { left:false, right:false, shoot:false, restart:false };
+document.addEventListener('keydown', e=> {
+  if (e.code === 'ArrowLeft' || e.key === 'a') {KEY.left = true;}
+  if (e.code === 'ArrowRight'|| e.key === 'd') {KEY.right = true;}
+  if (e.code === 'Space')              {KEY.shoot = true;}
+  if (e.key === 'r' || e.key === 'R')   {KEY.restart = true;}
+});
+document.addEventListener('keyup', e=> {
+  if (e.code === 'ArrowLeft' || e.key === 'a') {KEY.left = false;}
+  if (e.code === 'ArrowRight' || e.key === 'd') {KEY.right = false;}
+  if (e.code === 'Space')         {KEY.shoot = false;}
+});
+
+// ------------------------------------------------------
+// Game Objects
+// ------------------------------------------------------
+class Player {
+  constructor() {
+    this.width = 40; this.height = 20;
+    this.x = WIDTH/2 - this.width/2;
+    this.y = HEIGHT - this.height - 10;
+    this.speed = 4;
+    this.maxHP = 10;
+    this.hp = this.maxHP;
+    this.speedBoostTimer = 0;
+    this.fireRate = 0.2; // shots per second
+    this.lastShot = 0;
+  }
+  getSpeed(){ return this.speed * (this.speedBoostTimer>0?1.5:1); } // 50% boost
+  update(dt){
+    let hSpeed = 0;
+    if (KEY.left)  hSpeed -= this.getSpeed();
+    if (KEY.right) hSpeed += this.getSpeed();
+    this.x = clamp(this.x + hSpeed, 0, WIDTH - this.width);
+    // fire
+    if (KEY.shoot){
+      const now = performance.now()/1000;
+      if (now - this.lastShot > 1/this.fireRate){
+        this.lastShot = now;
+        missiles.push(new Missile(this.x + this.width/2, this.y));
+      }
+    }
+    if (this.speedBoostTimer>0) this.speedBoostTimer -= dt;
+  }
+  draw(){
+    // ship body
+    ctx.fillStyle = '#0ff';
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+    // left wing
+    ctx.fillRect(this.x-5, this.y+5, 5, 10);
+    // right wing
+    ctx.fillRect(this.x+this.width, this.y+5, 5, 10);
+    // health bar
+    const barWidth = 100;
+    const barHeight = 8;
+    const hpPerc = this.hp / this.maxHP;
+    ctx.fillStyle = '#222';
+    ctx.fillRect(10, HEIGHT - barHeight - 5, barWidth, barHeight);
+    ctx.fillStyle = '#0f0';
+    ctx.fillRect(10, HEIGHT - barHeight - 5, barWidth*hpPerc, barHeight);
+    ctx.strokeStyle = '#fff';
+    ctx.strokeRect(10, HEIGHT - barHeight -5, barWidth, barHeight);
+  }
+}
+class missile {
+  constructor(x,y){
+    this.x = x - 2;
+    this.y = y;
+    this.w = 4;
+    this.h = 12;
+    this.speed = 7;
+  }
+  update(){
+    this.y -= this.speed;
+  }
+  draw(){
+    ctx.fillStyle = '#ff0';
+    ctx.fillRect(this.x,this.y,this.w,this.h);
+  }
+}
+class Enemy {
+  constructor(x,y){
+    this.x = x; this.y = y;
+    this.w = 30; this.h = 20;
+    this.speed = 1;
+    this.hp = 1;
+    this.color = '#f44';
+  }
+  update(){ this.y += this.speed; }
+  draw(){ 
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+    // simple pixel‑art eyes
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(this.x+5,this.y+5,3,3);
+    ctx.fillRect(this.x+22,this.y+5,3,3);
+  }
+}
+class BossEnemy extends Enemy {
+  constructor(){
+    super(WIDTH/2-60, -120);
+    this.w = 120; this.h = 80;
+    this.speed = 0.6;
+    this.maxHP = 50; this.hp = 50;
+    this.color = '#8a2';
+  }
+  update(){ this.y+= this.speed; }
+  draw(){
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+    // eye
+    ctx.fillStyle = '#000';
+    for(let i=0;i<3;i++){
+        ctx.beginPath(); 
+        ctx.arc(this.x+30+ i*30, this.y+20, 6, 0, Math.PI*2);
+        ctx.fill();
+    }
+    // health bar above boss
+    const barHeight = 6;
+    const barWidth = this.w * (this.hp/this.maxHP);
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(this.x, this.y-10, barWidth, barHeight);
+    ctx.strokeStyle = '#fff';
+    ctx.strokeRect(this.x, this.y-10, this.w, barHeight);
+  }
+}
+class Pickup {
+  constructor(x,y,type){
+    this.x = x; this.y = y;
+    this.type = type; // "heart" or "speed"
+    this.speed = 1;
+    this.size = 20;
+  }
+  update(){ this.y += this.speed; }
+  draw(){
+    if (this.type=== 'heart'){
+      ctx.fillStyle = 'pink';
+      ctx.beginPath();
+      const cx = this.x + this.size/2;
+      const cy = this.y + this.size/2;
+      const r = this.size/2;
+      // heart using two arcs
+      ctx.moveTo(cx, cy + r/3);
+      ctx.arc(cx - r/3, cy - r/5, r/2, Math.PI*0.5, Math.PI*1.5, true);
+      ctx.arc(cx + r/3, cy - r/5, r/2, Math.PI*1.5, Math.PI*0.5, false);
+      ctx.closePath();
+      ctx.fill();
+    }else if(this.type=== 'speed'){
+      ctx.fillStyle = '#0ff';
+      ctx.fillRect(this.x, this.y, this.size, this.size);
+      ctx.fillStyle = '#000';
+      ctx.font = '12px Courier';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('S', this.x+this.size/2, this.y+this.size/2 + 1);
+    }
+  }
+}
+
+// ------------------------------------------------------
+// Game State
+// ------------------------------------------------------
+let player, missiles, enemies, pickups;
+let boss = null;
+let bossSpawned = false;
+let killCount = 0;
+let waveTimer = 0;
+let gameState = 'playing'; // 'playing', 'win', 'gameover'
+
+// ------------------------------------------------------
+// Init / Reset
+// ------------------------------------------------------
+function reset(){
+  player = new Player();
+  missiles = [];
+  enemies = [];
+  pickups = [];
+  boss = null;
+  bossSpawned = false;
+  killCount = 0;
+  waveTimer = 0;
+  gameState = 'playing';
+  overlay.innerHTML = '';
+}
+
+// ------------------------------------------------------
+// Game Logic
+// ------------------------------------------------------
+function spawnWave(){
+  const cols = 8;
+  const spacingX = 70;
+  const startX = (WIDTH - (cols-1)*spacingX)/2;
+  const y = -30;
+  for(let i=0;i<cols;i++){
+    const x = startX + i*spacingX;
+    enemies.push(new Enemy(x,y));
+  }
+}
+function maybeSpawnBoss(){
+  if (killCount >= 30 && !bossSpawned){
+    boss = new BossEnemy();
+    bossSpawned = true;
+  }
+}
+function handleCollisions(){
+  // missile vs enemies
+  for(let i=missiles.length-1;i>=0;i--){
+    const m = missiles[i];
+    // bullet hits enemy
+    for(let j=enemies.length-1;j>=0;j--){
+      const e = enemies[j];
+      if (m.x < e.x+e.w && m.x+m.w > e.x && m.y < e.y+e.h && m.y+m.h > e.y){
+        // hit!
+        missiles.splice(i,1);
+        e.hp--;
+        if (e.hp<=0){
+          // drop item?
+          if (Math.random()<0.2){
+            const type = Math.random()<0.5? 'heart':'speed';
+            const drop = new Pickup(e.x+e.w/2-10, e.y+e.h/2-10, type);
+            pickups.push(drop);
+          }
+          enemies.splice(j,1);
+          killCount++;
+          maybeSpawnBoss();
+        }
+        break;
+      }
+    }
+    // bullet hits boss
+    if (boss && m.x < boss.x+boss.w && m.x+m.w > boss.x && m.y < boss.y+boss.h && m.y+m.h > boss.y){
+      missiles.splice(i,1);
+      boss.hp--;
+      if (boss.hp<=0){
+        boss = null;
+        gameState='win';
+        overlay.innerHTML = '<div>You Win!<br>Press R to Restart</div>';
+      }
+    }
+  }
+  // enemy vs player
+  for(let i=enemies.length-1;i>=0;i--){
+    const e = enemies[i];
+    if (e.x < player.x+player.width && e.x+e.width > player.x &&
+        e.y < player.y+player.height && e.y+e.height > player.y){
+      // hit
+      player.hp--;
+      enemies.splice(i,1);
+      if (player.hp<=0){
+        gameState='gameover';
+        overlay.innerHTML = '<div>Game Over<br>Press R to Restart</div>';
+      }
+    }
+  }
+  // boss vs player
+  if (boss && 
+      boss.x < player.x+player.width && boss.x+boss.width > player.x &&
+      boss.y < player.y+player.height && boss.y+boss.height > player.y){
+    player.hp=0;
+    gameState='gameover';
+    overlay.innerHTML = '<div>Game Over<br>Press R to Restart</div>';
+  }
+
+  // pickups
+  for(let i=pickups.length-1;i>=0;i--){
+    const p = pickups[i];
+    if (p.x < player.x+player.width && p.x+p.size > player.x &&
+        p.y < player.y+player.height && p.y+p.size > player.y){
+      // pick it up
+      if (p.type==='heart'){
+        player.hp = Math.min(player.maxHP, player.hp+3);
+      }else if(p.type==='speed'){
+        player.speedBoostTimer = 10; // seconds
+      }
+      pickups.splice(i,1);
+    }
+  }
+}
+
+// ------------------------------------------------------
+// Main Loop
+// ------------------------------------------------------
+let lastTime = performance.now();
+function loop(now){
+  const dt = (now - lastTime)/1000;
+  lastTime = now;
+  // clear
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0,0,WIDTH,HEIGHT);
+  
+  if (gameState === 'playing'){
+    // spawn waves
+    waveTimer += dt;
+    if (waveTimer > 2){
+      waveTimer = 0;
+      spawnWave();
+    }
+    // update entities
+    player.update(dt);
+    missiles.forEach(m=>m.update());
+    enemies.forEach(e=>e.update());
+    pickups.forEach(p=>p.update());
+    if (boss) boss.update();
+    // remove off‑screen missiles
+    missiles = missiles.filter(m=>m.y+ m.h > 0);
+    // remove off‑screen enemies
+    enemies = enemies.filter(e=> e.y < HEIGHT);
+    // remove off‑screen pickups
+    pickups = pickups.filter(p=>p.y < HEIGHT);
+    // collisions
+    handleCollisions();
+    // draw everything
+    player.draw();
+    missiles.forEach(m=>m.draw());
+    enemies.forEach(e=>e.draw());
+    pickups.forEach(p=>p.draw());
+    if (boss) boss.draw();
+  }
+  // schedule next frame
+  requestAnimationFrame(loop);
+}
+
+// ------------------------------------------------------
+// Restart
+// ------------------------------------------------------
+document.addEventListener('keydown', e=>{
+  if (e.key==='r' || e.key==='R'){
+    reset();
+    KEY.restart = false;
+  }
+});
+reset();
+requestAnimationFrame(loop);
+</script>
+</body></html>

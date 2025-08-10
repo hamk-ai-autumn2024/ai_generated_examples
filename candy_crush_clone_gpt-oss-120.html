@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Match‑3 Canvas Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body,html{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:#222; font-family:sans-serif;
+    -webkit-user-select:none; -ms-user-select:none; user-select:none;
+  }
+  #ui{
+    position:absolute; top:10px; left:10px; right:10px;
+    display:flex; justify-content:space-between; align-items:center;
+    color:#fff; z-index:10;
+  }
+  #score{font-size:1.2rem;}
+  #restart{
+    background:#ff5c5c; border:none; padding:.4rem .8rem;
+    font-size:1rem; border-radius:4px; color:#fff; cursor:pointer;
+  }
+  canvas{display:block; width:100%; height:100%;}
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="score">Score: 0</div>
+  <button id="restart">Restart</button>
+</div>
+<canvas id="game"></canvas>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const restartBtn = document.getElementById('restart');
+
+  // ------- Game Settings -------
+  const COLS = 8;
+  const ROWS = 8;
+  const CANDY_TYPES = 6;               // different colors
+  const POINTS_PER_CANDY = 10;
+  const FALL_SPEED = 6;                // px per frame
+  const SWAP_DURATION = 200;           // ms
+  const CLEAR_DURATION = 300;          // ms fade out
+  // --------------------------------
+
+  let cellSize;          // computed from canvas size
+  let board = [];        // 2‑D array of {type, x, y, falling}
+  let selected = null;   // {r,c}
+  let animating = false; // true while any animation runs
+  let score = 0;
+  let lastTime = 0;
+
+  // ---------- Helpers ----------
+  const colors = ['#ff5b5b','#ffb84d','#ffe94d','#5bff5b','#5bcfff','#c95bff'];
+  const randInt = (n)=> Math.floor(Math.random()*n);
+  const isAdj = (a,b)=> Math.abs(a.r-b.r)+Math.abs(a.c-b.c)===1;
+
+  function resize() {
+    const size = Math.min(window.innerWidth, window.innerHeight);
+    canvas.width = size;
+    canvas.height = size;
+    cellSize = size / COLS;
+    initBoard();
+    draw();
+  }
+
+  function initBoard() {
+    board = [];
+    for (let r=0;r<ROWS;r++) {
+      const row=[];
+      for (let c=0;c<COLS;c++) {
+        row.push({type:randInt(CANDY_TYPES), falling:false});
+      }
+      board.push(row);
+    }
+    // guarantee no starting matches
+    while (findMatches().length) shuffleBoard();
+    score = 0;
+    updateScore();
+  }
+
+  function shuffleBoard() {
+    const flat = board.flat();
+    // Fisher‑Yates shuffle
+    for (let i=flat.length-1;i>0;i--) {
+      const j=randInt(i+1);
+      [flat[i].type, flat[j].type]=[flat[j].type, flat[i].type];
+    }
+    // rebuild
+    for (let r=0;r<ROWS;r++) {
+      for (let c=0;c<COLS;c++) {
+        board[r][c]=flat[r*COLS+c];
+      }
+    }
+  }
+
+  function updateScore() {
+    scoreEl.textContent = `Score: ${score}`;
+  }
+
+  // ---------- Rendering ----------
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for (let r=0;r<ROWS;r++) {
+      for (let c=0;c<COLS;c++) {
+        const cell=board[r][c];
+        const x=c*cellSize;
+        const y=r*cellSize;
+        // drop animation offset
+        const offset = cell.falling ? cell.falling * cellSize : 0;
+        // draw background (grid)
+        ctx.strokeStyle='#444';
+        ctx.strokeRect(x,y,cellSize,cellSize);
+        // draw candy
+        ctx.beginPath();
+        const radius = cellSize*0.4;
+        ctx.arc(x+cellSize/2, y+cellSize/2+offset, radius,0,Math.PI*2);
+        ctx.fillStyle=colors[cell.type];
+        ctx.fill();
+        // selection highlight
+        if (selected && selected.r===r && selected.c===c) {
+          ctx.lineWidth=4;
+          ctx.strokeStyle='rgba(255,255,255,0.8)';
+          ctx.stroke();
+          ctx.lineWidth=1;
+        }
+      }
+    }
+  }
+
+  // ---------- Game Logic ----------
+  function swap(a,b,callback){
+    animating=true;
+    const start = performance.now();
+    const aPos={r:a.r,c:a.c}, bPos={r:b.r,c:b.c};
+    const step = (now)=>{
+      const t = Math.min(1,(now-start)/SWAP_DURATION);
+      // interpolate positions (simple linear)
+      const ax = (1-t)*aPos.c + t*bPos.c;
+      const ay = (1-t)*aPos.r + t*bPos.r;
+      const bx = (1-t)*bPos.c + t*aPos.c;
+      const by = (1-t)*bPos.r + t*aPos.r;
+      // temporary draw
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      for(let r=0;r<ROWS;r++){
+        for(let c=0;c<COLS;c++){
+          if ((r===aPos.r && c===aPos.c) || (r===bPos.r && c===bPos.c)) continue;
+          const cell=board[r][c];
+          const x=c*cellSize, y=r*cellSize;
+          ctx.strokeStyle='#444';
+          ctx.strokeRect(x,y,cellSize,cellSize);
+          ctx.beginPath();
+          ctx.arc(x+cellSize/2, y+cellSize/2, cellSize*0.4,0,Math.PI*2);
+          ctx.fillStyle=colors[cell.type];
+          ctx.fill();
+        }
+      }
+      // draw moving candies
+      drawCandyAt(a.type,ax,ay);
+      drawCandyAt(b.type,bx,by);
+      if(t<1) requestAnimationFrame(step);
+      else {
+        // final swap in data
+        [board[a.r][a.c].type, board[b.r][b.c].type] = [board[b.r][b.c].type, board[a.r][a.c].type];
+        animating=false;
+        callback();
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
+  function drawCandyAt(type,gridX,gridY){
+    const x = gridX*cellSize;
+    const y = gridY*cellSize;
+    ctx.beginPath();
+    ctx.arc(x+cellSize/2, y+cellSize/2, cellSize*0.4,0,Math.PI*2);
+    ctx.fillStyle=colors[type];
+    ctx.fill();
+    ctx.strokeStyle='#444';
+    ctx.strokeRect(x,y,cellSize,cellSize);
+  }
+
+  function findMatches(){
+    const matches=[];
+    // horizontal
+    for(let r=0;r<ROWS;r++){
+      let count=1;
+      for(let c=1;c<COLS;c++){
+        if(board[r][c].type===board[r][c-1].type) count++;
+        else{
+          if(count>=3) for(let k=0;k<count;k++) matches.push({r,c-1-k});
+          count=1;
+        }
+      }
+      if(count>=3) for(let k=0;k<count;k++) matches.push({r,COLS-1-k});
+    }
+    // vertical
+    for(let c=0;c<COLS;c++){
+      let count=1;
+      for(let r=1;r<ROWS;r++){
+        if(board[r][c].type===board[r-1][c].type) count++;
+        else{
+          if(count>=3) for(let k=0;k<count;k++) matches.push({r-1-k,c});
+          count=1;
+        }
+      }
+      if(count>=3) for(let k=0;k<count;k++) matches.push({ROWS-1-k,c});
+    }
+    // deduplicate
+    const uniq = {};
+    matches.forEach(p=> uniq[p.r+','+p.c]=p);
+    return Object.values(uniq);
+  }
+
+  function clearMatches(matches,callback){
+    if(!matches.length){callback();return;}
+    animating=true;
+    const start=performance.now();
+    const step = (now)=>{
+      const t = Math.min(1,(now-start)/CLEAR_DURATION);
+      const alpha = 1 - t;   // fade out
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      for(let r=0;r<ROWS;r++){
+        for(let c=0;c<COLS;c++){
+          const cell=board[r][c];
+          const x=c*cellSize, y=r*cellSize;
+          ctx.strokeStyle='#444';
+          ctx.strokeRect(x,y,cellSize,cellSize);
+          if(matches.some(m=>m.r===r && m.c===c)){
+            ctx.globalAlpha=alpha;
+          } else ctx.globalAlpha=1;
+          ctx.beginPath();
+          ctx.arc(x+cellSize/2, y+cellSize/2, cellSize*0.4,0,Math.PI*2);
+          ctx.fillStyle=colors[cell.type];
+          ctx.fill();
+          ctx.globalAlpha=1;
+        }
+      }
+      if(t<1) requestAnimationFrame(step);
+      else {
+        // actually remove
+        matches.forEach(p=>{
+          board[p.r][p.c].type = null;
+          score+=POINTS_PER_CANDY;
+        });
+        updateScore();
+        animating=false;
+        callback();
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
+  function collapseBoard(callback){
+    animating=true;
+    const colsToProcess = [...Array(COLS).keys()];
+    const processColumn = (colIdx)=>{
+      // make candies fall
+      let empty=0;
+      for(let r=ROWS-1;r>=0;r--){
+        if(board[r][colIdx].type===null){
+          empty++;
+        } else if(empty>0){
+          board[r+empty][colIdx].type = board[r][colIdx].type;
+          board[r][colIdx].type = null;
+        }
+      }
+      // fill new candies at top
+      for(let r=0;r<empty;r++){
+        board[r][colIdx].type = randInt(CANDY_TYPES);
+      }
+    };
+    colsToProcess.forEach(processColumn);
+    // simple fall animation (no per‑cell timing, just a quick redraw)
+    const frames = Math.ceil(cellSize / FALL_SPEED);
+    let f=0;
+    const step = ()=>{
+      f++;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      for(let r=0;r<ROWS;r++){
+        for(let c=0;c<COLS;c++){
+          const cell=board[r][c];
+          const x=c*cellSize;
+          const y=r*cellSize + (1 - f/frames)*cellSize; // shift down
+          ctx.strokeStyle='#444';
+          ctx.strokeRect(x,y,cellSize,cellSize);
+          if(cell.type!==null){
+            ctx.beginPath();
+            ctx.arc(x+cellSize/2, y+cellSize/2, cellSize*0.4,0,Math.PI*2);
+            ctx.fillStyle=colors[cell.type];
+            ctx.fill();
+          }
+        }
+      }
+      if(f<frames) requestAnimationFrame(step);
+      else{
+        animating=false;
+        callback();
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
+  function resolveBoard(){
+    const chain = ()=>{
+      const matches = findMatches();
+      if(matches.length===0){animating=false;draw();return;}
+      clearMatches(matches,()=>collapseBoard(chain));
+    };
+    chain();
+  }
+
+  // ---------- Input ----------
+  function getCellFromPos(x,y){
+    const rect = canvas.getBoundingClientRect();
+    const cx = x - rect.left;
+    const cy = y - rect.top;
+    const c = Math.floor(cx / cellSize);
+    const r = Math.floor(cy / cellSize);
+    if(r>=0 && r<ROWS && c>=0 && c<COLS) return {r,c};
+    return null;
+  }
+
+  // Click / tap
+  canvas.addEventListener('pointerdown',e=>{
+    if(animating) return;
+    const cell = getCellFromPos(e.clientX,e.clientY);
+    if(!cell) return;
+    if(!selected){
+      selected = cell;
+      draw();
+    }else{
+      if(isAdj(selected,cell)){
+        // try swap
+        swap(selected,cell,()=>{
+          const matches = findMatches();
+          if(matches.length){
+            resolveBoard();
+          }else{
+            // swap back if no match
+            swap(selected,cell,()=>{ draw(); });
+          }
+          selected=null;
+        });
+      }else{
+        selected = cell; // pick another
+        draw();
+      }
+    }
+  });
+
+  // Swipe handling (touch only)
+  let touchStart=null;
+  canvas.addEventListener('touchstart',e=>{
+    if(animating) return;
+    const touch = e.touches[0];
+    const cell = getCellFromPos(touch.clientX,touch.clientY);
+    if(cell){ touchStart={...cell}; }
+  },{passive:true});
+
+  canvas.addEventListener('touchend',e=>{
+    if(!touchStart || animating) return;
+    const touch = e.changedTouches[0];
+    const cell = getCellFromPos(touch.clientX,touch.clientY);
+    if(!cell) { touchStart=null; return; }
+    const dr = cell.r - touchStart.r;
+    const dc = cell.c - touchStart.c;
+    // Accept only cardinal directions and length 1
+    if(Math.abs(dr)+Math.abs(dc)===1){
+      const a = touchStart;
+      const b = cell;
+      swap(a,b,()=>{
+        const matches = findMatches();
+        if(matches.length){
+          resolveBoard();
+        }else{
+          // revert
+          swap(a,b,()=>{ draw(); });
+        }
+      });
+    }
+    touchStart=null;
+  },{passive:true});
+
+  // Restart button
+  restartBtn.addEventListener('click',()=>{ initBoard(); draw(); });
+
+  // ------- Init -------
+  window.addEventListener('resize',resize);
+  resize();               // set board size
+  // Resolve any accidental starter matches (unlikely after initBoard)
+  resolveBoard();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rustic 3D City – FPS Controls</title>
+<style>
+  body { margin:0; overflow:hidden; font-family:Arial; }
+  #instructions {
+    position:absolute; top:0; width:100%; height:100%;
+    background:rgba(0,0,0,0.7); color:#fff; display:flex;
+    align-items:center; justify-content:center; text-align:center;
+    cursor:pointer;
+  }
+</style>
+</head>
+<body>
+<div id="instructions">
+  <h1>Click to start</h1>
+  <p>W/A/S/D or Arrow Keys – Move | Space – Jump | R – Reset | Mouse – Look</p>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158/build/three.module.js';
+import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.158/examples/jsm/controls/PointerLockControls.js';
+
+let camera, scene, renderer, controls;
+let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+let canJump = false;
+let prevTime = performance.now();
+let velocity = new THREE.Vector3();
+let direction = new THREE.Vector3();
+
+const objects = [];          // buildings + hills (for collision)
+let blocker, instructions;
+let startPos, startRot;
+
+// ------------------- Init -------------------
+init();
+animate();
+
+function init() {
+  // renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize( window.innerWidth, window.innerHeight );
+  document.body.appendChild( renderer.domElement );
+
+  // scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb); // sky blue
+
+  // camera
+  camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+  // light
+  const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 1.0 );
+  hemiLight.position.set( 0, 200, 0 );
+  scene.add( hemiLight );
+
+  const dirLight = new THREE.DirectionalLight( 0xffffff, 0.8 );
+  dirLight.position.set( -100, 200, -100 );
+  dirLight.castShadow = true;
+  scene.add( dirLight );
+
+  // ground (grass)
+  const groundGeo = new THREE.PlaneGeometry( 500, 500 );
+  const groundMat = new THREE.MeshLambertMaterial( { color: 0x3c7a3c } );
+  const ground = new THREE.Mesh( groundGeo, groundMat );
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add( ground );
+
+  // ----- Roads (grid) -----
+  const roadWidth = 4;
+  const roadMat = new THREE.MeshLambertMaterial( { color: 0x333333 } );
+
+  // vertical roads
+  for (let i = -200; i <= 200; i += 50) {
+    const roadGeo = new THREE.BoxGeometry( roadWidth, 0.1, 500 );
+    const road = new THREE.Mesh( roadGeo, roadMat );
+    road.position.set( i, 0.05, 0 );
+    scene.add( road );
+  }
+  // horizontal roads
+  for (let i = -200; i <= 200; i += 50) {
+    const roadGeo = new THREE.BoxGeometry( 500, 0.1, roadWidth );
+    const road = new THREE.Mesh( roadGeo, roadMat );
+    road.position.set( 0, 0.05, i );
+    scene.add( road );
+  }
+
+  // ----- Houses -----
+  const houseBaseMat = new THREE.MeshLambertMaterial( { color: 0x8b5a2b } ); // rustic brown
+  const roofMat = new THREE.MeshLambertMaterial( { color: 0x556b2f } );     // dark olive
+
+  const houseCountX = 8, houseCountZ = 8;
+  const spacing = 45;
+  for (let i = 0; i < houseCountX; i++) {
+    for (let j = 0; j < houseCountZ; j++) {
+      // skip places where roads cross
+      const x = (i - houseCountX/2) * spacing + (Math.random() - 0.5) * 10;
+      const z = (j - houseCountZ/2) * spacing + (Math.random() - 0.5) * 10;
+      if (Math.abs(x) % 50 < 8 || Math.abs(z) % 50 < 8) continue; // leave space for roads
+
+      const houseHeight = 8 + Math.random() * 4;
+      const baseGeo = new THREE.BoxGeometry( 12, houseHeight, 12 );
+      const base = new THREE.Mesh( baseGeo, houseBaseMat );
+      base.position.set( x, houseHeight/2, z );
+      base.castShadow = true;
+      scene.add( base );
+
+      // roof – a pyramid (Cone geometry with 4 sides)
+      const roofHeight = 5;
+      const roofGeo = new THREE.ConeGeometry( 9, roofHeight, 4 );
+      const roof = new THREE.Mesh( roofGeo, roofMat );
+      roof.rotation.y = Math.PI / 4; // align with house sides
+      roof.position.set( x, houseHeight + roofHeight/2, z );
+      roof.castShadow = true;
+      scene.add( roof );
+
+      // add to collision objects (both base and roof as one AABB)
+      const houseBox = new THREE.Box3().setFromObject( new THREE.Group().add(base).add(roof) );
+      objects.push( houseBox );
+    }
+  }
+
+  // ----- Hills -----
+  const hillMat = new THREE.MeshLambertMaterial( { color: 0x2e8b57 } );
+  const hillPositions = [
+    {x:-120, z:-150, scale:30},
+    {x:  80, z:  90, scale:45},
+    {x:-200, z: 130, scale:35},
+    {x: 150, z:-100, scale:40}
+  ];
+
+  hillPositions.forEach(pos => {
+    const hillGeo = new THREE.SphereGeometry( 1, 8, 8 );
+    const hill = new THREE.Mesh( hillGeo, hillMat );
+    hill.scale.set( pos.scale, pos.scale/2, pos.scale );
+    hill.position.set( pos.x, pos.scale/4, pos.z );
+    hill.castShadow = true;
+    scene.add( hill );
+
+    const hillBox = new THREE.Box3().setFromObject( hill );
+    objects.push( hillBox );
+  });
+
+  // ----- Player / Controls -----
+  controls = new PointerLockControls( camera, document.body );
+
+  const blocker = document.getElementById( 'instructions' );
+  blocker.addEventListener( 'click', function () {
+    controls.lock();
+  } );
+
+  controls.addEventListener( 'lock', function () {
+    blocker.style.display = 'none';
+  } );
+
+  controls.addEventListener( 'unlock', function () {
+    blocker.style.display = 'flex';
+  } );
+
+  scene.add( controls.getObject() );
+
+  // starting position (a little above ground, near city centre)
+  startPos = new THREE.Vector3(0, 2, 200);
+  startRot = new THREE.Euler(0, Math.PI, 0);
+  resetPlayer();
+
+  // ----- Keyboard -----
+  const onKeyDown = function ( event ) {
+    switch ( event.code ) {
+      case 'ArrowUp':
+      case 'KeyW':
+        moveForward = true; break;
+      case 'ArrowLeft':
+      case 'KeyA':
+        moveLeft = true; break;
+      case 'ArrowDown':
+      case 'KeyS':
+        moveBackward = true; break;
+      case 'ArrowRight':
+      case 'KeyD':
+        moveRight = true; break;
+      case 'Space':
+        if ( canJump === true ) velocity.y += 8;
+        canJump = false;
+        break;
+      case 'KeyR':
+        resetPlayer();
+        break;
+    }
+  };
+
+  const onKeyUp = function ( event ) {
+    switch ( event.code ) {
+      case 'ArrowUp':
+      case 'KeyW':
+        moveForward = false; break;
+      case 'ArrowLeft':
+      case 'KeyA':
+        moveLeft = false; break;
+      case 'ArrowDown':
+      case 'KeyS':
+        moveBackward = false; break;
+      case 'ArrowRight':
+      case 'KeyD':
+        moveRight = false; break;
+    }
+  };
+
+  document.addEventListener( 'keydown', onKeyDown );
+  document.addEventListener( 'keyup', onKeyUp );
+
+  // ----- Window resize -----
+  window.addEventListener( 'resize', onWindowResize );
+
+  function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize( window.innerWidth, window.innerHeight );
+  }
+
+  // ----- Helper: reset player -----
+  function resetPlayer() {
+    controls.getObject().position.copy( startPos );
+    controls.getObject().rotation.copy( startRot );
+    velocity.set(0,0,0);
+  }
+}
+
+// ------------------- Animation Loop -------------------
+function animate() {
+  requestAnimationFrame( animate );
+
+  const time = performance.now();
+  const delta = ( time - prevTime ) / 1000;
+
+  if ( controls.isLocked === true ) {
+    // movement direction
+    direction.z = Number( moveForward ) - Number( moveBackward );
+    direction.x = Number( moveRight ) - Number( moveLeft );
+    direction.normalize(); // this ensures consistent movement in all directions
+
+    // acceleration
+    const speed = 30; // units per second
+    if ( moveForward || moveBackward ) velocity.z -= direction.z * speed * delta;
+    if ( moveLeft || moveRight )   velocity.x -= direction.x * speed * delta;
+
+    // apply friction
+    velocity.x -= velocity.x * 10.0 * delta;
+    velocity.z -= velocity.z * 10.0 * delta;
+
+    // gravity
+    velocity.y -= 30.0 * delta; // 30 = gravity
+
+    // compute next position
+    const deltaPos = new THREE.Vector3();
+    deltaPos.copy( velocity ).multiplyScalar( delta );
+
+    // ---- Collision detection ----
+    const playerBox = new THREE.Box3().setFromCenterAndSize(
+      controls.getObject().position.clone().add( new THREE.Vector3(0, 1, 0) ), // center a bit above ground
+      new THREE.Vector3( 1, 2, 1 ) // approximate player size
+    );
+
+    const proposedPos = controls.getObject().position.clone().add( deltaPos );
+
+    // test against each static object
+    let collided = false;
+    for ( const box of objects ) {
+      if ( box.intersectsBox( playerBox.translate( deltaPos ) ) ) {
+        collided = true;
+        break;
+      }
+    }
+
+    if ( collided ) {
+      // simple response: cancel horizontal motion, keep vertical (so we can still fall)
+      deltaPos.x = 0;
+      deltaPos.z = 0;
+    }
+
+    // move the camera
+    controls.getObject().position.add( deltaPos );
+
+    // ground check
+    if ( controls.getObject().position.y < 2 ) {
+      velocity.y = 0;
+      controls.getObject().position.y = 2;
+      canJump = true;
+    }
+  }
+
+  prevTime = time;
+  renderer.render( scene, camera );
+}
+</script>
+</body>
+</html>
