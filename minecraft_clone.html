@@ -538,7 +538,16 @@
     const overlay = document.getElementById('overlay');
     const startBtn = document.getElementById('startBtn');
     const resetBtn = document.getElementById('resetBtn');
+
+    function ensureWorldReady() {
+      if (voxelMap.size === 0) {
+        resetWorld(false);
+        spawnPlayer();
+      }
+    }
+
     startBtn.addEventListener('click', () => {
+      ensureWorldReady();
       controls.lock();
     });
     resetBtn.addEventListener('click', () => {
@@ -555,9 +564,8 @@
     // Build UI
     buildInventory();
 
-    // Init world
-    resetWorld(false);
-    spawnPlayer();
+  // Init world (also guarded on Start in case prior errors cleared state)
+  ensureWorldReady();
 
     // Resize handling
     window.addEventListener('resize', () => {
@@ -683,12 +691,13 @@
 
       if (controls.isLocked) {
         // Apply movement in camera space
-        const forward = camera.getWorldDirection(tmpVec).setY(0).normalize();
-        const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).multiplyScalar(-1);
+  const forward = camera.getWorldDirection(tmpVec).setY(0).normalize();
+  const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), forward).normalize();
 
-        const wish = new THREE.Vector3();
-        wish.addScaledVector(forward, -direction.z);
-        wish.addScaledVector(right, direction.x);
+  const wish = new THREE.Vector3();
+  // Positive direction.z (W) should move forward
+  wish.addScaledVector(forward, direction.z);
+  wish.addScaledVector(right, direction.x);
         if (wish.lengthSq() > 0) wish.normalize();
 
         // Acceleration towards wish dir
