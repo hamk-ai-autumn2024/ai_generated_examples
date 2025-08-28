@@ -190,7 +190,7 @@ Include comprehensive error checking. Create indexes for the most widely used li
 
 # maze_llm.py
 
-Create JS program to generate random mazes, which have at least one solution. Draw the maze using HTML5 Canvas and include a button to generate a new maze.. Output everything as 1 fully functional HTML5 file.
+Create JS program to generate random mazes, which have at least one solution. Draw the maze using HTML5 Canvas and include a button to generate a new maze. Output everything as 1 fully functional HTML5 file.
 
 # text_editor.html
 

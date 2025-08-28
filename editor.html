@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Text Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            background-color: #f4f4f4;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+        }
+
+        nav {
+            background-color: #34495e;
+            padding: 5px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .editor-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .line-numbers {
+            background-color: #ecf0f1;
+            padding: 10px;
+            text-align: right;
+            border-right: 1px solid #bdc3c7;
+            min-width: 50px;
+            overflow-y: auto;
+        }
+
+        .line-numbers div {
+            margin-bottom: 18px; /* Match line height */
+        }
+
+        #editor {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            background-color: white;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        footer {
+            background-color: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 5px;
+            font-size: 12px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .modal-content button {
+            margin-right: 10px;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            nav {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .editor-container {
+                flex-direction: column;
+            }
+
+            .line-numbers {
+                min-width: auto;
+                border-right: none;
+                border-bottom: 1px solid #bdc3c7;
+                display: flex;
+                justify-content: space-around;
+            }
+
+            .line-numbers div {
+                margin: 0;
+            }
+
+            #editor {
+                height: 70vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Modern Text Editor</h1>
+    </header>
+    <nav>
+        <button id="new-btn">New (Ctrl+N)</button>
+        <button id="open-btn">Open (Ctrl+O)</button>
+        <button id="save-btn">Save (Ctrl+S)</button>
+        <button id="save-as-btn">Save As</button>
+        <button id="select-all-btn">Select All (Ctrl+A)</button>
+        <button id="find-btn">Find (Ctrl+F)</button>
+        <button id="replace-btn">Replace (Ctrl+H)</button>
+    </nav>
+    <main>
+        <article class="editor-container">
+            <div class="line-numbers" id="line-numbers"></div>
+            <textarea id="editor" placeholder="Start typing..."></textarea>
+        </article>
+    </main>
+    <footer>
+        <p>&copy; 2023 Modern Text Editor. Responsive and mobile-friendly.</p>
+    </footer>
+
+    <!-- Modals for file operations -->
+    <div id="save-modal" class="modal">
+        <div class="modal-content">
+            <h3>Save File</h3>
+            <input type="text" id="filename-input" placeholder="Enter filename (e.g., document.txt)">
+            <button id="save-confirm">Save</button>
+            <button id="save-cancel">Cancel</button>
+        </div>
+    </div>
+
+    <div id="find-modal" class="modal">
+        <div class="modal-content">
+            <h3>Find</h3>
+            <input type="text" id="find-input" placeholder="Find text">
+            <button id="find-next">Find Next</button>
+            <button id="find-cancel">Cancel</button>
+        </div>
+    </div>
+
+    <div id="replace-modal" class="modal">
+        <div class="modal-content">
+            <h3>Replace</h3>
+            <input type="text" id="replace-find-input" placeholder="Find text">
+            <input type="text" id="replace-with-input" placeholder="Replace with">
+            <button id="replace-next">Replace Next</button>
+            <button id="replace-all">Replace All</button>
+            <button id="replace-cancel">Cancel</button>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" accept=".txt">
+
+    <script>
+        const editor = document.getElementById('editor');
+        const lineNumbers = document.getElementById('line-numbers');
+        const fileInput = document.getElementById('file-input');
+        let currentFileName = 'untitled.txt';
+        let findIndex = -1;
+
+        // Constants for magic values
+        const LINE_HEIGHT = 18;
+        const DEFAULT_FILENAME = 'untitled.txt';
+
+        // Update line numbers
+        function updateLineNumbers() {
+            const lines = editor.value.split('\n').length;
+            lineNumbers.innerHTML = '';
+            for (let i = 1; i <= lines; i++) {
+                const div = document.createElement('div');
+                div.textContent = i;
+                lineNumbers.appendChild(div);
+            }
+        }
+
+        // Sync line numbers on input
+        editor.addEventListener('input', updateLineNumbers);
+        editor.addEventListener('scroll', () => {
+            lineNumbers.scrollTop = editor.scrollTop;
+        });
+
+        // Initialize
+        updateLineNumbers();
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey) {
+                switch (e.key) {
+                    case 'n':
+                        e.preventDefault();
+                        newFile();
+                        break;
+                    case 'o':
+                        e.preventDefault();
+                        openFile();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        saveFile();
+                        break;
+                    case 'a':
+                        e.preventDefault();
+                        editor.select();
+                        break;
+                    case 'f':
+                        e.preventDefault();
+                        showFindModal();
+                        break;
+                    case 'h':
+                        e.preventDefault();
+                        showReplaceModal();
+                        break;
+                }
+            }
+        });
+
+        // Button event listeners
+        document.getElementById('new-btn').addEventListener('click', newFile);
+        document.getElementById('open-btn').addEventListener('click', openFile);
+        document.getElementById('save-btn').addEventListener('click', saveFile);
+        document.getElementById('save-as-btn').addEventListener('click', showSaveModal);
+        document.getElementById('select-all-btn').addEventListener('click', () => editor.select());
+        document.getElementById('find-btn').addEventListener('click', showFindModal);
+        document.getElementById('replace-btn').addEventListener('click', showReplaceModal);
+
+        // File operations
+        function newFile() {
+            editor.value = '';
+            currentFileName = DEFAULT_FILENAME;
+            updateLineNumbers();
+        }
+
+        function openFile() {
+            fileInput.click();
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    editor.value = event.target.result;
+                    currentFileName = file.name;
+                    updateLineNumbers();
+                };
+                reader.onerror = () => {
+                    console.error('Error reading file');
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function saveFile() {
+            const blob = new Blob([editor.value], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = currentFileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function showSaveModal() {
+            document.getElementById('filename-input').value = currentFileName;
+            document.getElementById('save-modal').style.display = 'flex';
+        }
+
+        document.getElementById('save-confirm').addEventListener('click', () => {
+            currentFileName = document.getElementById('filename-input').value || DEFAULT_FILENAME;
+            saveFile();
+            document.getElementById('save-modal').style.display = 'none';
+        });
+
+        document.getElementById('save-cancel').addEventListener('click', () => {
+            document.getElementById('save-modal').style.display = 'none';
+        });
+
+        // Find functionality
+        function showFindModal() {
+            document.getElementById('find-modal').style.display = 'flex';
+        }
+
+        document.getElementById('find-next').addEventListener('click', () => {
+            const text = document.getElementById('find-input').value;
+            if (text) {
+                const content = editor.value;
+                findIndex = content.indexOf(text, findIndex + 1);
+                if (findIndex !== -1) {
+                    editor.setSelectionRange(findIndex, findIndex + text.length);
+                    editor.focus();
+                } else {
+                    findIndex = -1;
+                }
+            }
+        });
+
+        document.getElementById('find-cancel').addEventListener('click', () => {
+            document.getElementById('find-modal').style.display = 'none';
+            findIndex = -1;
+        });
+
+        // Replace functionality
+        function showReplaceModal() {
+            document.getElementById('replace-modal').style.display = 'flex';
+        }
+
+        document.getElementById('replace-next').addEventListener('click', () => {
+            const findText = document.getElementById('replace-find-input').value;
+            const replaceText = document.getElementById('replace-with-input').value;
+            if (findText) {
+                const content = editor.value;
+                const newContent = content.replace(findText, replaceText);
+                editor.value = newContent;
+                updateLineNumbers();
+            }
+        });
+
+        document.getElementById('replace-all').addEventListener('click', () => {
+            const findText = document.getElementById('replace-find-input').value;
+            const replaceText = document.getElementById('replace-with-input').value;
+            if (findText) {
+                const content = editor.value;
+                const newContent = content.replaceAll(findText, replaceText);
+                editor.value = newContent;
+                updateLineNumbers();
+            }
+        });
+
+        document.getElementById('replace-cancel').addEventListener('click', () => {
+            document.getElementById('replace-modal').style.display = 'none';
+        });
+
+        // Error checking: Ensure editor is accessible
+        if (!editor) {
+            console.error('Editor element not found');
+        }
+    </script>
+</body>
+</html>

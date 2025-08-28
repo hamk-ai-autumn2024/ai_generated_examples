@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Space Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: monospace;
+            color: #0f0;
+        }
+        canvas {
+            border: 2px solid #0f0;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Constants
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
+        const PLAYER_WIDTH = 40;
+        const PLAYER_HEIGHT = 20;
+        const PLAYER_SPEED = 5;
+        const MISSILE_WIDTH = 4;
+        const MISSILE_HEIGHT = 20;
+        const MISSILE_SPEED = 10;
+        const ENEMY_WIDTH = 30;
+        const ENEMY_HEIGHT = 20;
+        const ENEMY_SPEED = 1;
+        const ITEM_SIZE = 20;
+        const ITEM_SPEED = 2;
+        const BOSS_WIDTH = 100;
+        const BOSS_HEIGHT = 50;
+        const BOSS_SPEED = 0.5;
+        const MAX_HEALTH = 10;
+        const BOSS_HEALTH = 50;
+        const DROP_CHANCE = 0.2;
+        const SPEED_BOOST_DURATION = 10000; // ms
+        const SPEED_BOOST_MULTIPLIER = 1.5;
+
+        // Game state
+        let player = { x: CANVAS_WIDTH / 2 - PLAYER_WIDTH / 2, y: CANVAS_HEIGHT - 60, health: MAX_HEALTH, speed: PLAYER_SPEED, boostEnd: 0 };
+        let missiles = [];
+        let enemies = [];
+        let items = [];
+        let boss = null;
+        let gameState = 'playing'; // 'playing', 'gameOver', 'win'
+        let wave = 0;
+        let keys = {};
+
+        // Controls
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === ' ') {
+                e.preventDefault();
+                shoot();
+            }
+            if (e.key === 'r' || e.key === 'R') {
+                restart();
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        function shoot() {
+            if (gameState !== 'playing') return;
+            missiles.push({ x: player.x + PLAYER_WIDTH / 2 - MISSILE_WIDTH / 2, y: player.y });
+        }
+
+        function spawnEnemies() {
+            if (wave >= 5 && !boss) {
+                boss = { x: CANVAS_WIDTH / 2 - BOSS_WIDTH / 2, y: 50, health: BOSS_HEALTH };
+                return;
+            }
+            for (let i = 0; i < 5 + wave; i++) {
+                enemies.push({ x: Math.random() * (CANVAS_WIDTH - ENEMY_WIDTH), y: -ENEMY_HEIGHT - Math.random() * 100 });
+            }
+            wave++;
+        }
+
+        function update() {
+            if (gameState !== 'playing') return;
+
+            // Player movement
+            let currentSpeed = player.speed;
+            if (Date.now() < player.boostEnd) {
+                currentSpeed *= SPEED_BOOST_MULTIPLIER;
+            } else {
+                player.speed = PLAYER_SPEED;
+            }
+            if ((keys['ArrowLeft'] || keys['a'] || keys['A']) && player.x > 0) {
+                player.x -= currentSpeed;
+            }
+            if ((keys['ArrowRight'] || keys['d'] || keys['D']) && player.x < CANVAS_WIDTH - PLAYER_WIDTH) {
+                player.x += currentSpeed;
+            }
+
+            // Missiles
+            missiles = missiles.filter(m => {
+                m.y -= MISSILE_SPEED;
+                return m.y > -MISSILE_HEIGHT;
+            });
+
+            // Enemies
+            enemies = enemies.filter(e => {
+                e.y += ENEMY_SPEED;
+                if (e.y > CANVAS_HEIGHT) return false;
+                // Collision with player
+                if (e.x < player.x + PLAYER_WIDTH && e.x + ENEMY_WIDTH > player.x &&
+                    e.y < player.y + PLAYER_HEIGHT && e.y + ENEMY_HEIGHT > player.y) {
+                    player.health--;
+                    if (player.health <= 0) gameState = 'gameOver';
+                    return false;
+                }
+                return true;
+            });
+
+            // Boss
+            if (boss) {
+                boss.y += BOSS_SPEED;
+                if (boss.x < player.x + PLAYER_WIDTH / 2) boss.x += BOSS_SPEED;
+                if (boss.x + BOSS_WIDTH > player.x + PLAYER_WIDTH / 2) boss.x -= BOSS_SPEED;
+                // Collision with player
+                if (boss.x < player.x + PLAYER_WIDTH && boss.x + BOSS_WIDTH > player.x &&
+                    boss.y < player.y + PLAYER_HEIGHT && boss.y + BOSS_HEIGHT > player.y) {
+                    player.health--;
+                    if (player.health <= 0) gameState = 'gameOver';
+                }
+            }
+
+            // Items
+            items = items.filter(item => {
+                item.y += ITEM_SPEED;
+                if (item.y > CANVAS_HEIGHT) return false;
+                // Collision with player
+                if (item.x < player.x + PLAYER_WIDTH && item.x + ITEM_SIZE > player.x &&
+                    item.y < player.y + PLAYER_HEIGHT && item.y + ITEM_SIZE > player.y) {
+                    if (item.type === 'H') {
+                        player.health = Math.min(MAX_HEALTH, player.health + 3);
+                    } else if (item.type === 'S') {
+                        player.boostEnd = Date.now() + SPEED_BOOST_DURATION;
+                    }
+                    return false;
+                }
+                return true;
+            });
+
+            // Missile collisions
+            missiles.forEach(m => {
+                // With enemies
+                enemies.forEach((e, ei) => {
+                    if (m.x < e.x + ENEMY_WIDTH && m.x + MISSILE_WIDTH > e.x &&
+                        m.y < e.y + ENEMY_HEIGHT && m.y + MISSILE_HEIGHT > e.y) {
+                        missiles.splice(missiles.indexOf(m), 1);
+                        enemies.splice(ei, 1);
+                        if (Math.random() < DROP_CHANCE) {
+                            items.push({ x: e.x, y: e.y, type: Math.random() < 0.5 ? 'H' : 'S' });
+                        }
+                    }
+                });
+                // With boss
+                if (boss && m.x < boss.x + BOSS_WIDTH && m.x + MISSILE_WIDTH > boss.x &&
+                    m.y < boss.y + BOSS_HEIGHT && m.y + MISSILE_HEIGHT > boss.y) {
+                    missiles.splice(missiles.indexOf(m), 1);
+                    boss.health--;
+                    if (boss.health <= 0) {
+                        gameState = 'win';
+                    }
+                }
+            });
+
+            // Spawn new wave
+            if (enemies.length === 0 && !boss) {
+                spawnEnemies();
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Player
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT);
+
+            // Missiles
+            ctx.fillStyle = '#ff0';
+            missiles.forEach(m => ctx.fillRect(m.x, m.y, MISSILE_WIDTH, MISSILE_HEIGHT));
+
+            // Enemies
+            ctx.fillStyle = '#f00';
+            enemies.forEach(e => ctx.fillRect(e.x, e.y, ENEMY_WIDTH, ENEMY_HEIGHT));
+
+            // Boss
+            if (boss) {
+                ctx.fillStyle = '#800';
+                ctx.fillRect(boss.x, boss.y, BOSS_WIDTH, BOSS_HEIGHT);
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px monospace';
+                ctx.fillText(`Boss HP: ${boss.health}`, boss.x, boss.y - 10);
+            }
+
+            // Items
+            items.forEach(item => {
+                ctx.fillStyle = item.type === 'H' ? '#f0f' : '#0ff';
+                ctx.fillRect(item.x, item.y, ITEM_SIZE, ITEM_SIZE);
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px monospace';
+                ctx.fillText(item.type, item.x + 5, item.y + 15);
+            });
+
+            // UI
+            ctx.fillStyle = '#0f0';
+            ctx.font = '20px monospace';
+            ctx.fillText(`Health: ${player.health}`, 10, 30);
+            ctx.fillText(`Wave: ${wave}`, 10, 60);
+
+            // Game state
+            if (gameState === 'gameOver') {
+                ctx.fillStyle = '#f00';
+                ctx.font = '40px monospace';
+                ctx.fillText('Game Over', CANVAS_WIDTH / 2 - 100, CANVAS_HEIGHT / 2);
+                ctx.font = '20px monospace';
+                ctx.fillText('Press R to Restart', CANVAS_WIDTH / 2 - 80, CANVAS_HEIGHT / 2 + 40);
+            } else if (gameState === 'win') {
+                ctx.fillStyle = '#0f0';
+                ctx.font = '40px monospace';
+                ctx.fillText('You Win!', CANVAS_WIDTH / 2 - 80, CANVAS_HEIGHT / 2);
+                ctx.font = '20px monospace';
+                ctx.fillText('Press R to Restart', CANVAS_WIDTH / 2 - 80, CANVAS_HEIGHT / 2 + 40);
+            }
+        }
+
+        function restart() {
+            player = { x: CANVAS_WIDTH / 2 - PLAYER_WIDTH / 2, y: CANVAS_HEIGHT - 60, health: MAX_HEALTH, speed: PLAYER_SPEED, boostEnd: 0 };
+            missiles = [];
+            enemies = [];
+            items = [];
+            boss = null;
+            gameState = 'playing';
+            wave = 0;
+            spawnEnemies();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize
+        spawnEnemies();
+        gameLoop();
+    </script>
+</body>
+</html>

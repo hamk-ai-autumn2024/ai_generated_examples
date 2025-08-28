@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rustic 3D City</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #87CEEB; /* Sky blue background */
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        @media (max-width: 768px) {
+            #gameCanvas {
+                width: 100vw;
+                height: 100vh;
+            }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.179.1/three.tsl.js" integrity="sha512-SCfv7v5j2YiOsdTrQdeXSgrdqOAKdw7WwrBA3ore9TRxW2OxWkV6NXNMaG1MhdhBqDB6mboh8jRrwZIgrkOBQQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r150/three.min.js"></script>-->
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        // Constants for better practices
+        const CANVAS_ID = 'gameCanvas';
+        const GROUND_SIZE = 100;
+        const HOUSE_SIZE = 5;
+        const ROOF_HEIGHT = 3;
+        const ROAD_WIDTH = 2;
+        const HILL_HEIGHT = 10;
+        const PLAYER_HEIGHT = 2;
+        const JUMP_FORCE = 0.2;
+        const GRAVITY = -0.01;
+        const MOVE_SPEED = 0.1;
+        const LOOK_SPEED = 0.002;
+        const COLLISION_DISTANCE = 2;
+
+        // Initialize scene, camera, renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById(CANVAS_ID) });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 50, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        scene.add(directionalLight);
+
+        // Ground
+        const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // Forest green
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Houses
+        const houses = [];
+        const houseMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Saddle brown
+        const roofMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 }); // Dark brown
+        for (let i = 0; i < 10; i++) {
+            const houseGeometry = new THREE.BoxGeometry(HOUSE_SIZE, HOUSE_SIZE, HOUSE_SIZE);
+            const house = new THREE.Mesh(houseGeometry, houseMaterial);
+            house.position.set((Math.random() - 0.5) * 40, HOUSE_SIZE / 2, (Math.random() - 0.5) * 40);
+            house.castShadow = true;
+            house.receiveShadow = true;
+            scene.add(house);
+
+            // Roof
+            const roofGeometry = new THREE.ConeGeometry(HOUSE_SIZE / 2, ROOF_HEIGHT, 4);
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.set(house.position.x, house.position.y + HOUSE_SIZE / 2 + ROOF_HEIGHT / 2, house.position.z);
+            roof.castShadow = true;
+            scene.add(roof);
+
+            houses.push({ house, roof });
+        }
+
+        // Roads
+        const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x696969 }); // Dim gray
+        const roads = [];
+        // Horizontal roads
+        for (let i = -20; i <= 20; i += 10) {
+            const roadGeometry = new THREE.PlaneGeometry(GROUND_SIZE, ROAD_WIDTH);
+            const road = new THREE.Mesh(roadGeometry, roadMaterial);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(0, 0.01, i);
+            road.receiveShadow = true;
+            scene.add(road);
+            roads.push(road);
+        }
+        // Vertical roads
+        for (let i = -20; i <= 20; i += 10) {
+            const roadGeometry = new THREE.PlaneGeometry(ROAD_WIDTH, GROUND_SIZE);
+            const road = new THREE.Mesh(roadGeometry, roadMaterial);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(i, 0.01, 0);
+            road.receiveShadow = true;
+            scene.add(road);
+            roads.push(road);
+        }
+
+        // Hills
+        const hillMaterial = new THREE.MeshLambertMaterial({ color: 0x32CD32 }); // Lime green
+        const hills = [];
+        for (let i = 0; i < 5; i++) {
+            const hillGeometry = new THREE.SphereGeometry(HILL_HEIGHT, 16, 16);
+            const hill = new THREE.Mesh(hillGeometry, hillMaterial);
+            hill.position.set((Math.random() - 0.5) * 60, HILL_HEIGHT / 2, (Math.random() - 0.5) * 60);
+            hill.castShadow = true;
+            hill.receiveShadow = true;
+            scene.add(hill);
+            hills.push(hill);
+        }
+
+        // Player setup
+        camera.position.set(0, PLAYER_HEIGHT, 10);
+        let velocityY = 0;
+        let isOnGround = true;
+        const originalPosition = camera.position.clone();
+        const originalRotation = camera.rotation.clone();
+
+        // Mouse controls
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (event) => {
+            mouseX = event.movementX || 0;
+            mouseY = event.movementY || 0;
+        });
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === renderer.domElement) {
+                // Pointer locked
+            }
+        });
+        renderer.domElement.addEventListener('click', () => {
+            renderer.domElement.requestPointerLock();
+        });
+
+        // Keyboard controls
+        const keys = {};
+        document.addEventListener('keydown', (event) => {
+            keys[event.code] = true;
+            if (event.code === 'KeyR') {
+                camera.position.copy(originalPosition);
+                camera.rotation.copy(originalRotation);
+                velocityY = 0;
+                isOnGround = true;
+            }
+        });
+        document.addEventListener('keyup', (event) => {
+            keys[event.code] = false;
+        });
+
+        // Collision detection
+        function checkCollision(position) {
+            // Check houses
+            for (const { house } of houses) {
+                const distance = position.distanceTo(house.position);
+                if (distance < COLLISION_DISTANCE + HOUSE_SIZE / 2) {
+                    return true;
+                }
+            }
+            // Check hills
+            for (const hill of hills) {
+                const distance = position.distanceTo(hill.position);
+                if (distance < COLLISION_DISTANCE + HILL_HEIGHT / 2) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Mouse look
+            camera.rotation.y -= mouseX * LOOK_SPEED;
+            camera.rotation.x -= mouseY * LOOK_SPEED;
+            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            mouseX = 0;
+            mouseY = 0;
+
+            // Movement
+            const direction = new THREE.Vector3();
+            if (keys['KeyW'] || keys['ArrowUp']) direction.z -= 1;
+            if (keys['KeyS'] || keys['ArrowDown']) direction.z += 1;
+            if (keys['KeyA'] || keys['ArrowLeft']) direction.x -= 1;
+            if (keys['KeyD'] || keys['ArrowRight']) direction.x += 1;
+            direction.normalize();
+            direction.applyEuler(camera.rotation);
+
+            // Jump
+            if (keys['Space'] && isOnGround) {
+                velocityY = JUMP_FORCE;
+                isOnGround = false;
+            }
+
+            // Gravity
+            velocityY += GRAVITY;
+            camera.position.y += velocityY;
+
+            // Ground collision
+            if (camera.position.y <= PLAYER_HEIGHT) {
+                camera.position.y = PLAYER_HEIGHT;
+                velocityY = 0;
+                isOnGround = true;
+            }
+
+            // Horizontal movement with collision
+            const newPosition = camera.position.clone().add(direction.multiplyScalar(MOVE_SPEED));
+            if (!checkCollision(newPosition)) {
+                camera.position.add(direction.multiplyScalar(MOVE_SPEED));
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>
