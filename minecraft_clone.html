@@ -148,8 +148,8 @@
         · Save <span class="kbd">P</span> · Load <span class="kbd">L</span> · Reset <span class="kbd">R</span>
       </p>
       <div class="actions">
-        <button class="primary" id="startBtn">Start</button>
-        <button class="secondary" id="resetBtn">Reset World</button>
+  <button class="primary" id="startBtn" type="button">Start</button>
+  <button class="secondary" id="resetBtn" type="button">Reset World</button>
       </div>
     </div>
   </section>
@@ -250,11 +250,22 @@
 
     // Geometries and materials (reused)
     const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
+    // Slightly push faces back so edge lines sit on top visually
     const materials = new Map();
     for (const b of BLOCKS) {
-      const mat = new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.9, metalness: 0.0 });
+      const mat = new THREE.MeshStandardMaterial({
+        color: b.color,
+        roughness: 0.9,
+        metalness: 0.0,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1
+      });
       materials.set(b.id, mat);
     }
+    // Shared edges geometry/material for crisp outlines
+    const edgesGeo = new THREE.EdgesGeometry(cubeGeo);
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x101318, linewidth: 1, transparent: true, opacity: 0.6 });
 
     // Simple pseudo-noise for heightmap (deterministic, no deps)
     const seededRandom = (seed) => {
@@ -315,6 +326,10 @@
       const mesh = new THREE.Mesh(cubeGeo, mat);
       mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
       mesh.castShadow = true; mesh.receiveShadow = true;
+      // Add edge lines as a child for visibility
+      const edges = new THREE.LineSegments(edgesGeo, edgeMat);
+      edges.renderOrder = 2; // draw after faces
+      mesh.add(edges);
       mesh.userData = { x, y, z, id };
       scene.add(mesh);
       voxelMap.set(key, { id, mesh });
@@ -328,8 +343,7 @@
       const entry = voxelMap.get(key);
       if (!entry) return false;
       scene.remove(entry.mesh);
-      entry.mesh.geometry.dispose?.(); // reuse shared geo, but safe call
-      // Don't dispose shared material
+      // Do not dispose shared geometries/materials; they're reused by many meshes
       voxelMap.delete(key);
       if (recordChange) changes.set(key, 0);
       return true;
@@ -547,13 +561,14 @@
     }
 
     startBtn.addEventListener('click', () => {
-      ensureWorldReady();
+      // World is prepared on load; do not reset on Start
       controls.lock();
     });
     resetBtn.addEventListener('click', () => {
       resetWorld(true); spawnPlayer();
     });
 
+    // Only hide the overlay, do not touch world or renderer
     controls.addEventListener('lock', () => {
       overlay.style.display = 'none';
     });
@@ -697,7 +712,7 @@
   const wish = new THREE.Vector3();
   // Positive direction.z (W) should move forward
   wish.addScaledVector(forward, direction.z);
-  wish.addScaledVector(right, direction.x);
+  wish.addScaledVector(right, -direction.x);
         if (wish.lengthSq() > 0) wish.normalize();
 
         // Acceleration towards wish dir
