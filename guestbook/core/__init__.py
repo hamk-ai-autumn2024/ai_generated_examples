@@ -1,0 +1,4 @@
+"""
+Core project package.
+"""
+

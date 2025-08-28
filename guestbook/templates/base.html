@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  {% load static %}
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Guestbook{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container flex between center">
+        <a class="brand" href="{% url 'guestbook:list' %}">Guestbook</a>
+        <nav class="nav">
+          <button id="theme-toggle" class="btn" aria-label="Toggle color theme" aria-pressed="false" title="Toggle theme">Theme</button>
+          {% if user.is_authenticated %}
+            <span class="nav-username">Hi, {{ user.username }}</span>
+            <form method="post" action="{% url 'logout' %}" style="display:inline">
+              {% csrf_token %}
+              <button class="btn" type="submit">Logout</button>
+            </form>
+          {% else %}
+            <a class="btn" href="{% url 'login' %}">Login</a>
+            <a class="btn primary" href="{% url 'signup' %}">Sign up</a>
+          {% endif %}
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      {% for m in messages %}
+        {% if m.tags %}
+          <div class="alert {{ m.tags }}">{{ m }}</div>
+        {% endif %}
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>Built with Django • <a href="https://www.djangoproject.com/" target="_blank" rel="noopener noreferrer">Docs</a></p>
+      </div>
+    </footer>
+    <script>
+      (function() {
+        var key = 'theme';
+        var root = document.documentElement;
+        var stored = null;
+        try { stored = localStorage.getItem(key); } catch (e) {}
+        var theme = stored || 'light'; // default to light
+        root.setAttribute('data-theme', theme);
+
+        var btn = document.getElementById('theme-toggle');
+        function updateBtn() {
+          var cur = root.getAttribute('data-theme');
+          var dark = cur === 'dark';
+          btn.setAttribute('aria-pressed', dark);
+          btn.textContent = dark ? 'Dark' : 'Light';
+        }
+        if (btn) {
+          btn.addEventListener('click', function() {
+            var cur = root.getAttribute('data-theme');
+            var next = cur === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', next);
+            try { localStorage.setItem(key, next); } catch (e) {}
+            updateBtn();
+          });
+          updateBtn();
+        }
+      })();
+    </script>
+  </body>
+</html>

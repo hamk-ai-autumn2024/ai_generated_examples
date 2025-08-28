@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Sign Up{% endblock %}
+{% block content %}
+  <section class="card auth">
+    <h1 class="card-title">Create account</h1>
+    <form class="stack" method="post" action="{% url 'signup' %}">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="field">{{ form.username.label_tag }} {{ form.username }}</div>
+      <div class="field">{{ form.email.label_tag }} {{ form.email }}</div>
+      <div class="field">{{ form.password1.label_tag }} {{ form.password1 }}</div>
+      <div class="field">{{ form.password2.label_tag }} {{ form.password2 }}</div>
+      <button class="btn primary" type="submit">Create account</button>
+    </form>
+    <p class="muted">Already have an account? <a href="{% url 'login' %}">Login</a>.</p>
+  </section>
+{% endblock %}
+

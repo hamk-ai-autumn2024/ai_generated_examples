@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+{% block content %}
+  <section class="card auth">
+    <h1 class="card-title">Login</h1>
+    <form class="stack" method="post" action="{% url 'login' %}">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="field">{{ form.username.label_tag }} {{ form.username }}</div>
+      <div class="field">{{ form.password.label_tag }} {{ form.password }}</div>
+      <button class="btn primary" type="submit">Login</button>
+    </form>
+    <p class="muted">No account? <a href="{% url 'signup' %}">Sign up</a>.</p>
+  </section>
+{% endblock %}
+

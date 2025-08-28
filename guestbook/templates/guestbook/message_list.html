@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Guestbook{% endblock %}
+{% block content %}
+  <section class="card">
+    <h1 class="card-title">Guestbook</h1>
+    {% if user.is_authenticated %}
+      <form class="stack" method="post" action="{% url 'guestbook:add' %}">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div class="field">
+          {{ form.content.errors }}
+          {{ form.content }}
+        </div>
+        <button class="btn primary" type="submit">Post Message</button>
+      </form>
+    {% else %}
+      <p class="muted">Please <a href="{% url 'login' %}">log in</a> to leave a message.</p>
+    {% endif %}
+  </section>
+
+  <section class="stack">
+    {% for m in guestbook_messages %}
+      <article class="message">
+        <header class="message-head">
+          <strong>@{{ m.user.username }}</strong>
+          <time class="muted">{{ m.created_at|date:'Y-m-d H:i' }}</time>
+        </header>
+        <p>{{ m.content|linebreaksbr }}</p>
+      </article>
+    {% empty %}
+      <p class="muted">No messages yet. Be the first!</p>
+    {% endfor %}
+  </section>
+{% endblock %}
+
